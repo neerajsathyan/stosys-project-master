@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/ftl.cpp
+ftl.h
+/home/neeraj/workspace/stosys/stosys-project-master/src/ftl.h
+errno.h
+-
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/ftl.h
+string
+-
+liblightnvm.h
+-
+

@@ -1,0 +1,7 @@
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/rebuild_cache.dir
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/milestone2c.dir
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/milestone2.dir
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/milestone3.dir
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/milestone3c.dir
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/kv.dir
+/home/neeraj/workspace/stosys/stosys-project-master/CMakeFiles/edit_cache.dir

@@ -1,0 +1,26 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/cftl.h
+sys/types.h
+-
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/kv.c
+kv.h
+/home/neeraj/workspace/stosys/stosys-project-master/src/kv.h
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/kv.h
+cftl.h
+/home/neeraj/workspace/stosys/stosys-project-master/src/cftl.h
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+

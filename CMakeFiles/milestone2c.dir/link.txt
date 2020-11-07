@@ -1,0 +1,1 @@
+/usr/bin/c++   -fopenmp   CMakeFiles/milestone2c.dir/src/assignment2_test_without_gc.cpp.o CMakeFiles/milestone2c.dir/src/cftl.c.o  -o bin/milestone2c -llightnvm -laio 

@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/cftl.c
+cftl.h
+/home/neeraj/workspace/stosys/stosys-project-master/src/cftl.h
+stddef.h
+-
+errno.h
+-
+
+/home/neeraj/workspace/stosys/stosys-project-master/src/cftl.h
+sys/types.h
+-
+

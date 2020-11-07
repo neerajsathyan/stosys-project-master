@@ -1,0 +1,1 @@
+/usr/bin/c++   -fopenmp   CMakeFiles/kv.dir/src/kv.c.o CMakeFiles/kv.dir/src/ftl.cpp.o  -o bin/kv -llightnvm -laio 
