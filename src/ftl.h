@@ -33,7 +33,7 @@ SOFTWARE.
 
 struct PageMapProp {
     size_t lpa;
-    nvm_addr ppa;
+    struct nvm_addr ppa;
     char flag;
     size_t num_bytes;
     size_t start_address;
@@ -53,6 +53,8 @@ class OpenChannelDevice {
     struct nvm_dev *dev;
     
     const struct nvm_geo *geo;
+
+    volatile int curr_ptr = 0; //starting address of the device (in la)
     
     volatile int curr_physical_group = 0;
     volatile int curr_physical_pu = 0;

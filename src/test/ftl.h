@@ -33,7 +33,7 @@ SOFTWARE.
 
 struct PageMapProp {
     size_t lpa;
-    nvm_addr ppa;
+    struct nvm_addr ppa;
     char flag;
     size_t num_bytes;
     size_t start_address;

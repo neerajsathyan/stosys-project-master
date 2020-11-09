@@ -112,6 +112,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
     if ((num_bytes%local_properties->alignment == 0) && (num_bytes >= local_properties->min_write_size)) {
         //check if the logical address is not present or if the map is empty..
         int sectors_required = num_bytes/geo->l.nbytes;
+        addrs = (nvm_addr* ) calloc(num_bytes, sizeof(*addrs));
         if(check_lp_or_emptymap(lp2ppMap, address)) {
             // Do write and mapping..
             ssize_t err = 0;
@@ -120,7 +121,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
             //     //allocate the array
             //     addrs = calloc()
             // }
-            addrs = (nvm_addr* ) calloc(num_bytes, sizeof(*addrs));
+            
             //Update Group, PU, chunk, sector based on current values..
             //TODO: for now assert is given in update_genericaddress if device size is over.. implement
             //a return error code here later..
@@ -184,6 +185,9 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
             
         }
 
+        nvm_addr_prn(addrs, sectors_required, dev);
+
+
         ret = nvm_cmd_write(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
         nvm_ret_pr(&ret_struct);
         //TODO: Find a way to return status error codes.. rather than -1 and 0;
@@ -207,10 +211,10 @@ void OpenChannelDevice::update_genericaddress() {
     curr_physical_sector = (curr_physical_sector + 1)%sectors_per_chunk;
     if (curr_physical_sector == 0)
         curr_physical_chunk = (curr_physical_chunk + 1)%geo->l.nchunk;
-    if (curr_physical_chunk == 0)
+    if (curr_physical_chunk == 0 && curr_physical_sector == 0)
         curr_physical_pu = (curr_physical_pu + 1)%geo->l.npunit;
     //TODO: Implement R/W Parallelism here later..
-    if (curr_physical_pu == 0)
+    if (curr_physical_pu == 0 && curr_physical_chunk == 0 && curr_physical_sector == 0)
         curr_physical_group = (curr_physical_group + 1)%geo->l.npugrp;
     assert(curr_physical_sector <= sectors_per_chunk);
     assert(curr_physical_chunk <= geo->l.nchunk);
