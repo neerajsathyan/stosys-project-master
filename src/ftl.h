@@ -37,8 +37,15 @@ typedef struct {
     size_t alignment;
 } OpenChannelDeviceProperties;
 
+typedef struct {
+    // size_t physical_addr;
+    nvm_addr logical_addr;
+    short flag;  //-1 -> invalid, 0-> erase, 1->valid
+} TableField;
+
 class OpenChannelDevice {
     struct nvm_dev *dev;
+    TableField *table_array;
 public:
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();

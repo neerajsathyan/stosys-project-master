@@ -27,6 +27,7 @@ SOFTWARE.
 
 #include "ftl.h"
 #include <errno.h>
+#include <unordered_map>
 
 /* FIXME milestone 2 and 3 (if using C++)
  * Use this function to initialize your FTL.
@@ -39,9 +40,10 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
         exit(0);
     }
     nvm_dev_pr(dev);
-
+    const struct nvm_geo *geo = nvm_dev_get_geo(dev);
+    std::unordered_map<size_t, TableField> table;
+    // TableField *array_table = (TableField *) malloc(sizeof(TableField) * geo->tbytes);
     //TODO: Logic to initialise FTL..
-    
 }
 
 /*
@@ -50,7 +52,7 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
  */
 OpenChannelDevice::~OpenChannelDevice() {
     nvm_dev_close(dev);
-    
+    // free(array_table);
 
     //TODO: join threads..
     //TODO: deallocate memory..
@@ -65,6 +67,8 @@ int OpenChannelDevice::get_device_properties(OpenChannelDeviceProperties *proper
         struct nvm_ret *ret;
         const struct nvm_geo *geo = nvm_dev_get_geo(dev);
         properties->min_write_size = nvm_dev_get_ws_min(dev) * geo->l.nbytes;
+        //nbytes_sector ? 
+        //let's keep some for gc 
         properties->device_size = geo->tbytes;
         properties->min_read_size = geo->l.nbytes;
         properties->alignment = geo->l.nbytes;
@@ -75,11 +79,38 @@ int OpenChannelDevice::get_device_properties(OpenChannelDeviceProperties *proper
 }
 
 int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) {
-    return -ENOSYS;
+    // return -ENOSYS;
+    struct nvm_ret ret_struct;
+    struct nvm_addr *addrs;
+    if (num_bytes % properties->min_read_size == 0){
+        void *read_buffer = calloc(1, num_bytes);
+        std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
+        if(iter == table.end()) {
+            return -ENOSYS; 
+        }
+        if(iter->second.flag == -1 || iter->second.flag == 0){
+            return -ENOSYS;
+        }
+        // addrs = (nvm_addr *) calloc(num_bytes, sizeof(*addrs));
+        // addrs = & iter->second.logical_addr;
+        int ret = nvm_cmd_read(dev, (nvm_addr *)&iter->second.logical_addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        return ret;
+    }
+    else 
+        return -ENOSYS;
 }
 
 int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer) {
-    return -ENOSYS;
+    struct nvm_ret ret_struct;
+    if( num_bytes % properties->min_write_size == 1){
+        // write_buffer = calloc(num_bytes, properties->min_write_size);
+        ret = nvm_cmd_write(dev, address, num_bytes, buffer, NULL, 0, &ret_struct);
+        printf("The return code for the write operation is %d \n", ret);
+        nvm_ret_pr(&ret_struct);
+        
+    }
+    else
+        return -ENOSYS;
 }
 
 /*
