@@ -190,6 +190,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
         if(ret == 0) {
             //Successful write..
             current_size_nbytes += num_bytes;
+            return num_bytes;  
         }
         return ret;
 

@@ -188,6 +188,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
         }
 
         ret = nvm_cmd_write(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
+        nvm_ret_pr(&ret_struct);
         //TODO: Find a way to return status error codes.. rather than -1 and 0;
         //&ret_struct.status;
         if(ret == 0) {
