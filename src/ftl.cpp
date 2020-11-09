@@ -218,7 +218,7 @@ void OpenChannelDevice::update_genericaddress() {
 
 
 
-bool check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap, size_t address) {
+bool OpenChannelDevice::check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap, size_t address) {
     if (lp2ppMap.empty()) {
         return true;
     } else {

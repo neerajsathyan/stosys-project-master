@@ -77,6 +77,7 @@ public:
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
     void update_genericaddress();
+    bool check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap, size_t address);
 };
 
 extern "C" OpenChannelDevice *open_ocssd(const char *device_path);
