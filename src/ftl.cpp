@@ -133,28 +133,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
         return -ENOSYS;
 }
 
-// std::unordered_map<size_t, TableField> OpenChannelDevice::get_table(){
-//     return table;
-// }
 
-// bool OpenChannelDevice::check_table(size_t address) {
-//     std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
-//         if(iter == table.end()) {
-//             return false; 
-//         }
-//         // if(iter->second.flag == -1 || iter->second.flag == 0){
-//         //     return false;
-//         // }
-//         // else
-//         // {
-//         //     return true;
-//         // }
-//         else
-//         {
-//              return true;
-//         }
-        
-// }
 /*
  * Below are wrapper functions if to use your C++ functions from C, if required.
  * For example, if you write your FTL in C++ and your key value store in C.

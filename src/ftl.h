@@ -29,6 +29,7 @@ SOFTWARE.
 
 #include <string>
 #include <liblightnvm.h>
+#include <unordered_map>
 
 typedef struct {
     size_t device_size;
@@ -45,8 +46,8 @@ typedef struct {
 
 class OpenChannelDevice {
     struct nvm_dev *dev;
-    std::unordered_map<size_t, TableField> table;
 public:
+    std::unordered_map<size_t, TableField> table;
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();
     int64_t read(size_t address, size_t num_bytes, void *buffer);
