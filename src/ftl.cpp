@@ -82,8 +82,11 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
     // return -ENOSYS;
     struct nvm_ret ret_struct;
     struct nvm_addr *addrs;
+    OpenChannelDeviceProperties *properties = (OpenChannelDeviceProperties *)malloc(sizeof(OpenChannelDeviceProperties));
+    get_device_properties(properties);
     if (num_bytes % properties->min_read_size == 0){
         void *read_buffer = calloc(1, num_bytes);
+        // table;
         std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
         if(iter == table.end()) {
             return -ENOSYS; 
@@ -102,17 +105,56 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 
 int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer) {
     struct nvm_ret ret_struct;
-    if( num_bytes % properties->min_write_size == 1){
+    int ret;
+    struct nvm_addr addr;
+    OpenChannelDeviceProperties *properties = (OpenChannelDeviceProperties *)malloc(sizeof(OpenChannelDeviceProperties));
+    get_device_properties(properties);
+    if( num_bytes % properties->min_write_size == 0){
+        // if(check_table(address))
         // write_buffer = calloc(num_bytes, properties->min_write_size);
-        ret = nvm_cmd_write(dev, address, num_bytes, buffer, NULL, 0, &ret_struct);
+        std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
+        if(iter == table.end()) {
+            addr = nvm_addr_dev2gen(dev, address);
+            // addr.l.sectr; 
+            // addr.l.chunk;
+            // addr.l.
+        }
+        TableField temp_table_field = {addr, 1};
+        // temp_table_field->logical_addr = addr;
+        // temp_table_field->flag = 1;
+        std::pair<size_t, TableField> myshopping (address, temp_table_field);
+        table.insert(myshopping);
+        ret = nvm_cmd_write(dev, &addr, num_bytes, buffer, NULL, 0, &ret_struct);
         printf("The return code for the write operation is %d \n", ret);
         nvm_ret_pr(&ret_struct);
-        
+        return ret;
     }
     else
         return -ENOSYS;
 }
 
+// std::unordered_map<size_t, TableField> OpenChannelDevice::get_table(){
+//     return table;
+// }
+
+// bool OpenChannelDevice::check_table(size_t address) {
+//     std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
+//         if(iter == table.end()) {
+//             return false; 
+//         }
+//         // if(iter->second.flag == -1 || iter->second.flag == 0){
+//         //     return false;
+//         // }
+//         // else
+//         // {
+//         //     return true;
+//         // }
+//         else
+//         {
+//              return true;
+//         }
+        
+// }
 /*
  * Below are wrapper functions if to use your C++ functions from C, if required.
  * For example, if you write your FTL in C++ and your key value store in C.

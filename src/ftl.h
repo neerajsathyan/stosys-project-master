@@ -45,13 +45,15 @@ typedef struct {
 
 class OpenChannelDevice {
     struct nvm_dev *dev;
-    TableField *table_array;
+    std::unordered_map<size_t, TableField> table;
 public:
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();
     int64_t read(size_t address, size_t num_bytes, void *buffer);
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
+    std::unordered_map<size_t, TableField> get_table();
+    bool check_table(size_t address);
 };
 
 extern "C" OpenChannelDevice *open_ocssd(const char *device_path);
