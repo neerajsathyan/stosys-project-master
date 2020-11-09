@@ -81,22 +81,27 @@ int OpenChannelDevice::get_device_properties(OpenChannelDeviceProperties *proper
 int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) {
     // return -ENOSYS;
     struct nvm_ret ret_struct;
-    struct nvm_addr *addrs;
-    OpenChannelDeviceProperties *properties = (OpenChannelDeviceProperties *)malloc(sizeof(OpenChannelDeviceProperties));
-    get_device_properties(properties);
-    if (num_bytes % properties->min_read_size == 0){
-        void *read_buffer = calloc(1, num_bytes);
+    struct nvm_addr addr;
+    OpenChannelDeviceProperties properties;
+    //  = (OpenChannelDeviceProperties )malloc(sizeof(OpenChannelDeviceProperties));
+    get_device_properties(&properties);
+    if (num_bytes % properties.min_read_size == 0 && num_bytes >= properties.min_read_size){
+        // void *read_buffer = calloc(1, num_bytes);
         // table;
-        std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
-        if(iter == table.end()) {
-            return -ENOSYS; 
-        }
-        if(iter->second.flag == -1 || iter->second.flag == 0){
-            return -ENOSYS;
-        }
+        // std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
+        // if(iter == table.end()) {
+        //     return -ENOSYS; 
+        // }
+        // if(iter->second.flag == -1 || iter->second.flag == 0){
+        //     return -ENOSYS;
+        // }
         // addrs = (nvm_addr *) calloc(num_bytes, sizeof(*addrs));
         // addrs = & iter->second.logical_addr;
-        int ret = nvm_cmd_read(dev, (nvm_addr *)&iter->second.logical_addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        addr = nvm_addr_dev2gen(dev, address);
+        // int ret = nvm_cmd_read(dev, (nvm_addr *)&iter->second.logical_addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        int ret = nvm_cmd_read(dev, &addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        printf("The return code for the write operation is %d \n", ret);
+        nvm_ret_pr(&ret_struct);
         return ret;
     }
     else 
@@ -109,22 +114,23 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
     struct nvm_addr addr;
     OpenChannelDeviceProperties *properties = (OpenChannelDeviceProperties *)malloc(sizeof(OpenChannelDeviceProperties));
     get_device_properties(properties);
-    if( num_bytes % properties->min_write_size == 0){
+    if( num_bytes % properties->min_write_size == 0 && (num_bytes >= properties->min_write_size)){
         // if(check_table(address))
         // write_buffer = calloc(num_bytes, properties->min_write_size);
-        std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
-        if(iter == table.end()) {
+        // std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
+        // if(iter == table.end()) {
             addr = nvm_addr_dev2gen(dev, address);
             // addr.l.sectr; 
             // addr.l.chunk;
             // addr.l.
-        }
-        TableField temp_table_field = {addr, 1};
+        // }
+        // TableField temp_table_field = {addr, 1};
         // temp_table_field->logical_addr = addr;
         // temp_table_field->flag = 1;
-        std::pair<size_t, TableField> myshopping (address, temp_table_field);
-        table.insert(myshopping);
+        // std::pair<size_t, TableField> myshopping (address, temp_table_field);
+        // table.insert(myshopping);
         ret = nvm_cmd_write(dev, &addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        // printf("")
         printf("The return code for the write operation is %d \n", ret);
         nvm_ret_pr(&ret_struct);
         return ret;
