@@ -27,18 +27,32 @@ SOFTWARE.
 
 #include "ftl.h"
 #include <errno.h>
+#include <pthread.h>
+
+
+
+
 
 /* FIXME milestone 2 and 3 (if using C++)
  * Use this function to initialize your FTL.
  * The device_path is something similar to /dev/nvme0n1.
  */
 OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
-    dev = nvm_dev_open(device_path.c_str());
-    if (!dev) {
+    this->dev = nvm_dev_open(device_path.c_str());
+    if (!this->dev) {
         perror("nvm_dev_open");
-        exit(0);
+        exit(-1);
     }
-    nvm_dev_pr(dev);
+    nvm_dev_pr(this->dev);
+
+    //Gets geometric values and stored to variables..
+    this->geo = nvm_dev_get_geo(this->dev);
+    this->sectors_per_chunk = this->geo->l.nsectr;
+    this->num_chunks = this->geo->tbytes / (this->geo->l.nsectr * this->geo->l.nbytes);
+    this->sector_size = this->geo->l.nbytes;
+    this->chunk_size = this->geo->l.nsectr * this->geo->l.nbytes;
+    this->device_size = this->geo->tbytes;
+    this->current_size_nbytes = 0;
 
     //TODO: Logic to initialise FTL..
     
@@ -54,6 +68,13 @@ OpenChannelDevice::~OpenChannelDevice() {
 
     //TODO: join threads..
     //TODO: deallocate memory..
+    free(&this->geo);
+    free(&this->sectors_per_chunk);
+    free(&this->num_chunks);
+    free(&this->sector_size);
+    free(&this->chunk_size);
+    free(&this->device_size);
+    
 }
 
 /*
@@ -61,14 +82,11 @@ OpenChannelDevice::~OpenChannelDevice() {
  * They will be used by the key value store and the tests.
  */
 int OpenChannelDevice::get_device_properties(OpenChannelDeviceProperties *properties) {
-    if(dev) {
-        struct nvm_ret *ret;
-        const struct nvm_geo *geo = nvm_dev_get_geo(dev);
-        properties->min_write_size = nvm_dev_get_ws_min(dev) * geo->l.nbytes;
-        properties->device_size = geo->tbytes;
-        properties->min_read_size = geo->l.nbytes;
-        properties->alignment = geo->l.nbytes;
-        
+    if(this->dev) {
+        properties->min_write_size = nvm_dev_get_ws_min(dev) * this->sector_size;
+        properties->device_size = this->device_size;
+        properties->min_read_size = this->sector_size;
+        properties->alignment = this->sector_size;
         return 1;
     }
     return -ENOSYS;
@@ -79,7 +97,139 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 }
 
 int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer) {
-    return -ENOSYS;
+
+    if(current_size_nbytes >= device_size) {
+        //Disk Full...
+        return -1;
+    }
+    struct nvm_ret ret_struct;
+    struct nvm_addr *addrs;
+    int ret;
+    //Check if min_write_size is satisfied..
+    OpenChannelDeviceProperties *local_properties;
+    int status = get_device_properties(local_properties);
+    int min_write_size = nvm_dev_get_ws_min(dev); //Min no of sector to be written..
+    if ((num_bytes%local_properties->alignment == 0) && (num_bytes >= local_properties->min_write_size)) {
+        //check if the logical address is not present or if the map is empty..
+        int sectors_required = num_bytes/geo->l.nbytes;
+        if(check_lp_or_emptymap(lp2ppMap, address)) {
+            // Do write and mapping..
+            ssize_t err = 0;
+            // for (auto i=0; i< num_bytes/local_properties->min_write_size; ++i) {
+            //     //For each 4 sector writes of the buffer..
+            //     //allocate the array
+            //     addrs = calloc()
+            // }
+            addrs = (nvm_addr* ) calloc(num_bytes, sizeof(*addrs));
+            //Update Group, PU, chunk, sector based on current values..
+            //TODO: for now assert is given in update_genericaddress if device size is over.. implement
+            //a return error code here later..
+            //How much sectors required for this file..
+            
+            //sector_required should be aligned.. 
+            for(auto i=0; i<sectors_required; ++i) {
+                addrs[i].l.pugrp = curr_physical_group;
+                addrs[i].l.punit = curr_physical_pu;
+                addrs[i].l.chunk = curr_physical_chunk;
+                addrs[i].l.sectr = curr_physical_sector;
+                //Updating page map..
+                PageMapProp *pagemap = new PageMapProp();
+                pagemap->flag = 'W';
+                pagemap->lpa = address+(i * geo->l.nbytes);
+                pagemap->ppa = addrs[i];
+                pagemap->num_bytes = num_bytes;
+                pagemap->start_address = address;
+                //Adding the page map to the table..
+                //lp2ppMap.push_back(*new PageMapProp('W',(address+(i * geo->l.nbytes)),addrs[i]));
+                lp2ppMap.push_back(*pagemap);
+                //Update generic address..
+                update_genericaddress();
+            }
+
+        } else {
+            
+            //LPA-PPA mapping was foud, hence invalidate the current LPA table.. Required for GC..
+            int sector_invalidation_counter = 0;
+            for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(), iter->flag == 'W'; ++iter) {
+                // 0, num_bytes-8KB.. 0, 4..
+                //addr, addr+4086, addr+(2*4086), addr+(n*4086)  -->  (n-1)*4086 = num_bytes .. addr+num_bytes
+                if (iter->lpa < iter->start_address+iter->num_bytes) {
+                    iter->flag = 'I';
+                    sector_invalidation_counter++;
+                }
+            }
+
+            assert(sector_invalidation_counter == sectors_required);
+
+            //Now write the data with updated ppa to the lpa..
+            for(auto i=0; i<sectors_required; ++i) {
+                addrs[i].l.pugrp = curr_physical_group;
+                addrs[i].l.punit = curr_physical_pu;
+                addrs[i].l.chunk = curr_physical_chunk;
+                addrs[i].l.sectr = curr_physical_sector;
+                //Updating page map..
+                PageMapProp *pagemap = new PageMapProp();
+                pagemap->flag = 'W';
+                pagemap->lpa = address+(i * geo->l.nbytes);
+                pagemap->ppa = addrs[i];
+                pagemap->num_bytes = num_bytes;
+                pagemap->start_address = address;
+                //Adding the page map to the table..
+                //lp2ppMap.push_back(*new PageMapProp('W',(address+(i * geo->l.nbytes)),addrs[i]));
+                lp2ppMap.push_back(*pagemap);
+                //Update generic address..
+                update_genericaddress();
+            }
+
+            
+        }
+
+        ret = nvm_cmd_write(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
+        //TODO: Find a way to return status error codes.. rather than -1 and 0;
+        //&ret_struct.status;
+        if(ret == 0) {
+            //Successful write..
+            current_size_nbytes += num_bytes;
+        }
+        return ret;
+
+    } else {
+        //0x2
+        return -1;
+    }
+
+}
+
+void OpenChannelDevice::update_genericaddress() {
+    //Do updates to this like if 
+    curr_physical_sector = (curr_physical_sector + 1)%sectors_per_chunk;
+    if (curr_physical_sector == 0)
+        curr_physical_chunk = (curr_physical_chunk + 1)%geo->l.nchunk;
+    if (curr_physical_chunk == 0)
+        curr_physical_pu = (curr_physical_pu + 1)%geo->l.npunit;
+    //TODO: Implement R/W Parallelism here later..
+    if (curr_physical_pu == 0)
+        curr_physical_group = (curr_physical_group + 1)%geo->l.npugrp;
+    assert(curr_physical_sector <= sectors_per_chunk);
+    assert(curr_physical_chunk <= geo->l.nchunk);
+    assert(curr_physical_pu <= geo->l.npunit);
+    assert(curr_physical_group <= geo->l.npugrp);
+}
+
+
+
+bool check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap, size_t address) {
+    if (lp2ppMap.empty()) {
+        return true;
+    } else {
+        //Iterate to see if lp already exists..
+        for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
+            if (*(&iter->lpa) == address) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 /*

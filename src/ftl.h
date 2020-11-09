@@ -29,7 +29,18 @@ SOFTWARE.
 
 #include <string>
 #include <liblightnvm.h>
+#include <vector>
 
+struct PageMapProp {
+    size_t lpa;
+    nvm_addr ppa;
+    char flag;
+    size_t num_bytes;
+    size_t start_address;
+    //explicit PageMapProp(char flag, size_t lpa, nvm_addr ppa);
+};
+
+// group (2) -> PU (4) -> Chunk (6) -> block/sector (256)  ... 4096 bytes sector   50331648 total bytes
 typedef struct {
     size_t device_size;
     size_t min_write_size;
@@ -38,13 +49,34 @@ typedef struct {
 } OpenChannelDeviceProperties;
 
 class OpenChannelDevice {
+    
     struct nvm_dev *dev;
+    
+    const struct nvm_geo *geo;
+    
+    volatile int curr_physical_group = 0;
+    volatile int curr_physical_pu = 0;
+    volatile size_t curr_physical_sector = 0;
+    volatile size_t curr_physical_chunk = 0;
+    
+    size_t sectors_per_chunk;
+    size_t num_chunks;
+    size_t sector_size;
+    size_t chunk_size;
+    size_t device_size;
+
+    size_t current_size_nbytes;
+
+    // FTL Map Table (Page Mapped)
+    std::vector <PageMapProp> lp2ppMap;
+
 public:
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();
     int64_t read(size_t address, size_t num_bytes, void *buffer);
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
+    void update_genericaddress();
 };
 
 extern "C" OpenChannelDevice *open_ocssd(const char *device_path);
