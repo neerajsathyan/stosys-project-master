@@ -28,7 +28,7 @@ SOFTWARE.
 #include "ftl.h"
 #include <errno.h>
 #include <pthread.h>
-
+#include <iostream>
 
 
 
@@ -70,13 +70,13 @@ OpenChannelDevice::~OpenChannelDevice() {
 
     //TODO: join threads..
     //TODO: deallocate memory..
-    free(&this->geo);
-    free(&this->sectors_per_chunk);
-    free(&this->num_chunks);
-    free(&this->sector_size);
-    free(&this->chunk_size);
-    free(&this->device_size);
-    
+    /*free(this->geo);
+    free(this->sectors_per_chunk);
+    free(this->num_chunks);
+    free(this->sector_size);
+    free(this->chunk_size);
+    free(this->device_size);
+    */
 }
 
 /*
@@ -101,7 +101,8 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
     OpenChannelDeviceProperties properties;
     //  = (OpenChannelDeviceProperties )malloc(sizeof(OpenChannelDeviceProperties));
     int status = get_device_properties(&properties);
-    int sectors_required = num_bytes/geo->l.nbytes;
+
+    //int sectors_required = num_bytes/geo->l.nbytes;
     if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size){
         // void *read_buffer = calloc(1, num_bytes);
         // table;
@@ -125,9 +126,9 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
             }
         }*/
         // int ret = nvm_cmd_read(dev, (nvm_addr *)&iter->second.logical_addr, num_bytes, buffer, NULL, 0, &ret_struct);
-        
+        std::cout<<"Currently inside,           "; 
         int sectors_required = num_bytes/geo->l.nbytes;
-        addrs = (nvm_addr* ) calloc(num_bytes, sizeof(*addrs));
+        addrs = (nvm_addr* ) calloc(sectors_required, sizeof(*addrs));
 
 
         //TODO: Parallelise this..
@@ -136,6 +137,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
             if(table.find(address+(i*geo->l.nbytes)) != table.end()) {
                 addrs[i] = table[address+(i*geo->l.nbytes)].ppa;
             } else {
+		    std::cout<<"Illegal read";
                 //Ilegal read.. not written in map..
                 return -ENOSYS;
             }
@@ -171,7 +173,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
     if ((num_bytes%local_properties->alignment == 0) && (num_bytes >= local_properties->min_write_size)) {
         //check if the logical address is not present or if the map is empty..
         int sectors_required = num_bytes/geo->l.nbytes;
-        addrs = (nvm_addr* ) calloc(num_bytes, sizeof(*addrs));
+        addrs = (nvm_addr* ) calloc(sectors_required, sizeof(*addrs));
             // Do write and mapping..
             ssize_t err = 0;
             // for (auto i=0; i< num_bytes/local_properties->min_write_size; ++i) {
