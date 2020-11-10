@@ -30,6 +30,7 @@ SOFTWARE.
 #include <string>
 #include <liblightnvm.h>
 #include <vector>
+#include <unordered_map>
 
 struct PageMapProp {
     size_t lpa;
@@ -47,6 +48,12 @@ typedef struct {
     size_t min_read_size;
     size_t alignment;
 } OpenChannelDeviceProperties;
+
+typedef struct {
+    // size_t physical_addr;
+    nvm_addr logical_addr;
+    short flag;  //-1 -> invalid, 0-> erase, 1->valid
+} TableField;
 
 class OpenChannelDevice {
     
@@ -73,6 +80,7 @@ class OpenChannelDevice {
     std::vector <PageMapProp> lp2ppMap;
 
 public:
+    std::unordered_map<size_t, TableField> table;
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();
     int64_t read(size_t address, size_t num_bytes, void *buffer);

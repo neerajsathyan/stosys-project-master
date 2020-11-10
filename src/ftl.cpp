@@ -55,7 +55,6 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
     this->current_size_nbytes = 0;
 
     //TODO: Logic to initialise FTL..
-    
 }
 
 /*
@@ -64,7 +63,7 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
  */
 OpenChannelDevice::~OpenChannelDevice() {
     nvm_dev_close(dev);
-    
+    // free(array_table);
 
     //TODO: join threads..
     //TODO: deallocate memory..
@@ -93,7 +92,39 @@ int OpenChannelDevice::get_device_properties(OpenChannelDeviceProperties *proper
 }
 
 int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) {
-    return -ENOSYS;
+    // return -ENOSYS;
+    struct nvm_ret ret_struct;
+    struct nvm_addr addr;
+    OpenChannelDeviceProperties properties;
+    //  = (OpenChannelDeviceProperties )malloc(sizeof(OpenChannelDeviceProperties));
+    get_device_properties(&properties);
+    if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size){
+        // void *read_buffer = calloc(1, num_bytes);
+        // table;
+        // std::unordered_map<size_t, TableField>::const_iterator iter = table.find(address);
+        // if(iter == table.end()) {
+        //     return -ENOSYS; 
+        // }
+        // if(iter->second.flag == -1 || iter->second.flag == 0){
+        //     return -ENOSYS;
+        // }
+        // addrs = (nvm_addr *) calloc(num_bytes, sizeof(*addrs));
+        // addrs = & iter->second.logical_addr;
+        addr = nvm_addr_dev2gen(dev, address);
+        for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
+            if (*(&iter->lpa) == address) {
+                addr = iter->ppa;
+                break;
+            }
+        }
+        // int ret = nvm_cmd_read(dev, (nvm_addr *)&iter->second.logical_addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        int ret = nvm_cmd_read(dev, &addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        printf("The return code for the read operation is %d \n", ret);
+        nvm_ret_pr(&ret_struct);
+        return ret;
+    }
+    else 
+        return -ENOSYS;
 }
 
 int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer) {
@@ -238,6 +269,7 @@ bool OpenChannelDevice::check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap,
         return true;
     }
 }
+
 
 /*
  * Below are wrapper functions if to use your C++ functions from C, if required.
