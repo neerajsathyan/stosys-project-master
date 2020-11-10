@@ -94,10 +94,11 @@ int OpenChannelDevice::get_device_properties(OpenChannelDeviceProperties *proper
 int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) {
     // return -ENOSYS;
     struct nvm_ret ret_struct;
-    struct nvm_addr addr;
+    struct nvm_addr* addrs;
     OpenChannelDeviceProperties properties;
     //  = (OpenChannelDeviceProperties )malloc(sizeof(OpenChannelDeviceProperties));
     get_device_properties(&properties);
+    addrs = (nvm_addr* ) calloc(num_bytes, sizeof(*addrs));
     if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size){
         // void *read_buffer = calloc(1, num_bytes);
         // table;
@@ -110,15 +111,16 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
         // }
         // addrs = (nvm_addr *) calloc(num_bytes, sizeof(*addrs));
         // addrs = & iter->second.logical_addr;
-        addr = nvm_addr_dev2gen(dev, address);
+        // addr = nvm_addr_dev2gen(dev, address);
+        int i = 0;
         for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
-            if (*(&iter->lpa) == address) {
-                addr = iter->ppa;
-                break;
+            if (*(&iter->start_address) == address) {
+                addrs[i] = iter->ppa;
+                i++;
             }
         }
         // int ret = nvm_cmd_read(dev, (nvm_addr *)&iter->second.logical_addr, num_bytes, buffer, NULL, 0, &ret_struct);
-        int ret = nvm_cmd_read(dev, &addr, num_bytes, buffer, NULL, 0, &ret_struct);
+        int ret = nvm_cmd_read(dev, addrs, num_bytes, buffer, NULL, 0, &ret_struct);
         printf("The return code for the read operation is %d \n", ret);
         nvm_ret_pr(&ret_struct);
         return ret;
