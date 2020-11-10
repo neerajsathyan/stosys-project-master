@@ -77,17 +77,17 @@ class OpenChannelDevice {
     size_t current_size_nbytes;
 
     // FTL Map Table (Page Mapped)
-    std::vector <PageMapProp> lp2ppMap;
+    //std::vector <PageMapProp> lp2ppMap;
+    std::unordered_map<size_t, PageMapProp> table;
 
 public:
-    std::unordered_map<size_t, TableField> table;
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();
     int64_t read(size_t address, size_t num_bytes, void *buffer);
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
     void update_genericaddress();
-    bool check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap, size_t address);
+    //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
 };
 
 extern "C" OpenChannelDevice *open_ocssd(const char *device_path);
