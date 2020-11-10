@@ -220,6 +220,7 @@ void OpenChannelDevice::update_genericaddress() {
     assert(curr_physical_chunk <= geo->l.nchunk);
     assert(curr_physical_pu <= geo->l.npunit);
     assert(curr_physical_group <= geo->l.npugrp);
+    //TODO: Implement Size Over Logic
 }
 
 
