@@ -29,7 +29,8 @@ SOFTWARE.
 #include <errno.h>
 #include <pthread.h>
 #include <iostream>
-
+#include <stdio.h>
+#include <algorithm>
 
 
 
@@ -102,6 +103,10 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
     //  = (OpenChannelDeviceProperties )malloc(sizeof(OpenChannelDeviceProperties));
     int status = get_device_properties(&properties);
 
+    if (lp2ppMap.empty()) {
+        return -2;
+    }
+
     //int sectors_required = num_bytes/geo->l.nbytes;
     if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size){
         // void *read_buffer = calloc(1, num_bytes);
@@ -133,14 +138,25 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 
         //TODO: Parallelise this..
         for(auto i=0; i<sectors_required; ++i) {
+             bool flag = false;
             //See if the corresponding lpa in pagemap is set to write (valid read state)
-            if(table.find(address+(i*geo->l.nbytes)) != table.end()) {
+            /*if(table.find(address+(i*geo->l.nbytes)) != table.end()) {
                 addrs[i] = table[address+(i*geo->l.nbytes)].ppa;
             } else {
 		    std::cout<<"Illegal read";
                 //Ilegal read.. not written in map..
                 return -ENOSYS;
+            }*/
+            for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
+                if (iter->lpa == address + (i * geo->l.nbytes) && iter->flag == 'W') {
+                    flag = true;
+                    addrs[i] = iter->ppa;
+                    break;
+                }
             }
+                if (!flag) {
+                    return -3;
+                }
         }
         
         nvm_addr_prn(addrs, sectors_required, dev);
@@ -189,11 +205,19 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
             
             //sector_required should be aligned.. 
             for(auto i=0; i<sectors_required; ++i) {
-                if(table.find(address+(i* geo->l.nbytes)) != table.end()) {
+                //if(table.find(address+(i* geo->l.nbytes)) != table.end()) {
                     //Invalidate those mappings..
-                    PageMapProp *pagemap = &table.find(address+(i*geo->l.nbytes))->second;
-                    pagemap->flag = 'I';
-                }
+                //    PageMapProp *pagemap = &table.find(address+(i*geo->l.nbytes))->second;
+                //    pagemap->flag = 'I';
+                //}
+                 if (!lp2ppMap.empty()) {
+                    for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
+                        if ((iter->lpa) == address+(i * geo->l.nbytes)) {
+                            //Invalidate those mappings..
+                            iter->flag = 'I';
+                            break;
+                        }
+                    }
                 addrs[i].l.pugrp = curr_physical_group;
                 addrs[i].l.punit = curr_physical_pu;
                 addrs[i].l.chunk = curr_physical_chunk;
@@ -207,8 +231,8 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
                 pagemap->start_address = address;
                 //Adding the page map to the table..
                 //lp2ppMap.push_back(*new PageMapProp('W',(address+(i * geo->l.nbytes)),addrs[i]));
-                //lp2ppMap.push_back(*pagemap);
-                table[address+(i * geo->l.nbytes)] = *pagemap;
+                lp2ppMap.push_back(*pagemap);
+                // table[address+(i * geo->l.nbytes)] = *pagemap;
                 //Update generic address..
                 update_genericaddress();
             }
@@ -251,6 +275,14 @@ void OpenChannelDevice::update_genericaddress() {
     //TODO: Implement Size Over Logic
 }
 
+std::vector <PageMapProp> OpenChannelDevice::getMap() {
+    return lp2ppMap;
+}
+
+void OpenChannelDevice::setMap(std::vector <PageMapProp> mapper) {
+    lp2ppMap = mapper;
+}
+
 
 /*
  * Below are wrapper functions if to use your C++ functions from C, if required.
@@ -279,3 +311,50 @@ extern "C" int close_ocssd(OpenChannelDevice *dev) {
     return 0;
 }
 
+/*
+
+int main(int argc, char **argv) {
+
+    OpenChannelDevice *device = new OpenChannelDevice("/dev/nvme0n1");
+    OpenChannelDeviceProperties properties;
+    device->get_device_properties(&properties);
+    auto disk_size = properties.device_size;
+    auto min_write_size = properties.min_write_size;
+    auto num_waves = disk_size / min_write_size;
+    std::vector<uint8_t> write_vec(min_write_size);
+    std::vector<uint8_t> all_data_written(0);
+    all_data_written.reserve(64*min_write_size);
+
+    for (auto i=0; i<num_waves; i++) {
+        std::generate(write_vec.begin(), write_vec.end(), std::rand);
+
+        all_data_written.insert(all_data_written.begin() + (i * min_write_size), write_vec.begin(), write_vec.end());
+
+        std::cout<<"\nLogical Address: "<<(i * min_write_size)<<"\n";
+        auto bytes_written = device->write(i * min_write_size, min_write_size, reinterpret_cast<void *>(write_vec.data()));
+        std::cout<<bytes_written<<"\t"<<min_write_size<<"\n";
+        if (i==63)
+            break;
+        //REQUIRE(bytes_written == min_write_size);
+    }
+    std::vector <PageMapProp> mapper = device->getMap();
+    std::cout<<mapper[235].flag<<"\t"<<mapper[235].lpa<<"\t"<<mapper[235].num_bytes<<"\t"<<mapper[235].start_address<<"\n";
+    nvm_addr_pr(mapper[235].ppa);
+    std::cout<<"\n";
+    std::cout<<"\nElements in map: "<<mapper.size();
+    std::cout<<"\nREADING: \n";
+    std::vector<uint8_t> read_vec(2*min_write_size);
+    auto bytes_read = device->read(0, 64*min_write_size, reinterpret_cast<void *>(read_vec.data()));
+    std::cout<<"Read Status: "<<bytes_read;
+    mapper = device->getMap();
+    std::cout<<mapper[235].flag<<"\t"<<mapper[235].lpa<<"\t"<<mapper[235].num_bytes<<"\t"<<mapper[235].start_address<<"\n";
+    nvm_addr_pr(mapper[235].ppa);
+
+    std::cout<<"\nChecking read and write!!\n";
+    if (read_vec == all_data_written) {
+        std::cout<<"Equal!!";
+    } else {
+        std::cout<<"Not Equal!!";
+    }
+    return 0;
+}*/

@@ -77,8 +77,8 @@ class OpenChannelDevice {
     size_t current_size_nbytes;
 
     // FTL Map Table (Page Mapped)
-    //std::vector <PageMapProp> lp2ppMap;
-    std::unordered_map<size_t, PageMapProp> table;
+    std::vector <PageMapProp> lp2ppMap;
+    // std::unordered_map<size_t, PageMapProp> table;
 
 public:
     explicit OpenChannelDevice(const std::string &device_path);
