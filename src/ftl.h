@@ -30,7 +30,6 @@ SOFTWARE.
 #include <string>
 #include <liblightnvm.h>
 #include <vector>
-#include <unordered_map>
 
 struct PageMapProp {
     size_t lpa;
@@ -77,8 +76,8 @@ class OpenChannelDevice {
     size_t current_size_nbytes;
 
     // FTL Map Table (Page Mapped)
-    //std::vector <PageMapProp> lp2ppMap;
-    std::unordered_map<size_t, PageMapProp> table;
+    std::vector <PageMapProp> lp2ppMap;
+    //std::unordered_map<size_t, PageMapProp> table;
 
 public:
     explicit OpenChannelDevice(const std::string &device_path);
@@ -87,6 +86,8 @@ public:
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
     void update_genericaddress();
+    std::vector <PageMapProp> getMap();
+    void setMap(std::vector <PageMapProp> mapper);
     //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
 };
 
