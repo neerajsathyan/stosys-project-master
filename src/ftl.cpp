@@ -218,6 +218,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
                             break;
                         }
                     }
+                 }
                 addrs[i].l.pugrp = curr_physical_group;
                 addrs[i].l.punit = curr_physical_pu;
                 addrs[i].l.chunk = curr_physical_chunk;

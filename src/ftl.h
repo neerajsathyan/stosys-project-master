@@ -87,6 +87,8 @@ public:
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
     void update_genericaddress();
+    std::vector <PageMapProp> getMap();
+    void setMap(std::vector <PageMapProp> mapper);
     //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
 };
 
