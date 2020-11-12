@@ -137,12 +137,12 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
         
 
         
-        read_buffer = (char *) calloc(sectors_required, properties.min_read_size);
+        char *temp_read_buffer = (char *) calloc(1, properties.min_read_size);
+        addrs = (nvm_addr* ) calloc(sectors_required, sizeof(*addrs));
+        //read_buffer = (char *) calloc(sectors_required, properties.min_read_size);
         //TODO: Parallelise this..
         for(auto i=0; i<sectors_required; ++i) {
              bool flag = false;
-             char *temp_read_buffer = (char *) calloc(1, properties.min_read_size);
-             addrs = (nvm_addr* ) calloc(1, sizeof(*addrs));
             //See if the corresponding lpa in pagemap is set to write (valid read state)
             /*if(table.find(address+(i*geo->l.nbytes)) != table.end()) {
                 addrs[i] = table[address+(i*geo->l.nbytes)].ppa;
@@ -161,21 +161,23 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
                 if (!flag) {
                     return -3;
                 }
-            nvm_addr_prn(addrs, 1, dev);
-            int ret = nvm_cmd_read(dev, addrs, sectors_required, temp_read_buffer, NULL, 0, &ret_struct);
-            nvm_ret_pr(&ret_struct);
-            read_buffer[i] = *temp_read_buffer;
+            //nvm_addr_prn(addrs, 1, dev);
+            //int ret = nvm_cmd_read(dev, addrs, sectors_required, temp_read_buffer, NULL, 0, &ret_struct);
+            //nvm_ret_pr(&ret_struct);
+            //read_buffer[i] = *temp_read_buffer;
         }
-        buffer = read_buffer;
-        return num_bytes;
-        // int ret = nvm_cmd_read(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
+
+        nvm_addr_prn(addrs, 1, dev);
+        int ret = nvm_cmd_read(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
         // //printf("The return code for the read operation is %d \n", ret);
-        // nvm_ret_pr(&ret_struct);
+        nvm_ret_pr(&ret_struct);
         // if(ret == 0) {
         //     //Successful read..
         //     return num_bytes;
         // }
-        // return ret;
+        // return ret;	
+        //buffer = read_buffer;
+        return num_bytes;
     }
     else 
         return -100;
@@ -331,7 +333,7 @@ int main(int argc, char **argv) {
     auto num_waves = disk_size / min_write_size;
     std::vector<uint8_t> write_vec(min_write_size);
     std::vector<uint8_t> all_data_written(0);
-    all_data_written.reserve(64*min_write_size);
+    all_data_written.reserve(disk_size);
 
     for (auto i=0; i<num_waves; i++) {
         std::generate(write_vec.begin(), write_vec.end(), std::rand);
@@ -357,12 +359,15 @@ int main(int argc, char **argv) {
     mapper = device->getMap();
     std::cout<<mapper[235].flag<<"\t"<<mapper[235].lpa<<"\t"<<mapper[235].num_bytes<<"\t"<<mapper[235].start_address<<"\n";
     nvm_addr_pr(mapper[235].ppa);
+	*/
 
+    std::vector<uint8_t> read_vec(disk_size);
+    auto bytes_read = device->read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
     std::cout<<"\nChecking read and write!!\n";
     if (read_vec == all_data_written) {
         std::cout<<"Equal!!";
     } else {
         std::cout<<"Not Equal!!";
-    }*/
+    }
     return 0;
 }
