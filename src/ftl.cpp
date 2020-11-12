@@ -242,7 +242,7 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
 
 
         ret = nvm_cmd_write(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
-        //nvm_ret_pr(&ret_struct);
+        nvm_ret_pr(&ret_struct);
         //TODO: Find a way to return status error codes.. rather than -1 and 0;
         //&ret_struct.status;
         if(ret == 0) {
@@ -312,14 +312,13 @@ extern "C" int close_ocssd(OpenChannelDevice *dev) {
     return 0;
 }
 
-/*
-
 int main(int argc, char **argv) {
 
     OpenChannelDevice *device = new OpenChannelDevice("/dev/nvme0n1");
     OpenChannelDeviceProperties properties;
     device->get_device_properties(&properties);
-    auto disk_size = properties.device_size;
+    //auto disk_size = properties.device_size;
+    auto disk_size = 4096 * 4;
     auto min_write_size = properties.min_write_size;
     auto num_waves = disk_size / min_write_size;
     std::vector<uint8_t> write_vec(min_write_size);
@@ -334,12 +333,12 @@ int main(int argc, char **argv) {
         std::cout<<"\nLogical Address: "<<(i * min_write_size)<<"\n";
         auto bytes_written = device->write(i * min_write_size, min_write_size, reinterpret_cast<void *>(write_vec.data()));
         std::cout<<bytes_written<<"\t"<<min_write_size<<"\n";
-        if (i==63)
-            break;
+       // if (i==63)
+        //    break;
         //REQUIRE(bytes_written == min_write_size);
     }
-    std::vector <PageMapProp> mapper = device->getMap();
-    std::cout<<mapper[235].flag<<"\t"<<mapper[235].lpa<<"\t"<<mapper[235].num_bytes<<"\t"<<mapper[235].start_address<<"\n";
+    //std::vector <PageMapProp> mapper = device->getMap();
+    /*std::cout<<mapper[235].flag<<"\t"<<mapper[235].lpa<<"\t"<<mapper[235].num_bytes<<"\t"<<mapper[235].start_address<<"\n";
     nvm_addr_pr(mapper[235].ppa);
     std::cout<<"\n";
     std::cout<<"\nElements in map: "<<mapper.size();
@@ -356,6 +355,6 @@ int main(int argc, char **argv) {
         std::cout<<"Equal!!";
     } else {
         std::cout<<"Not Equal!!";
-    }
+    }*/
     return 0;
-}*/
+}
