@@ -143,10 +143,11 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
         //addrs = (nvm_addr* ) calloc(sectors_required, sizeof(*addrs));
         //read_buffer = (char *) calloc(sectors_required, properties.min_read_size);
         //TODO: Parallelise this..
+        addrs = (nvm_addr* ) calloc(1, sizeof(*addrs));
         for(auto i=0; i<sectors_required; ++i) {
              bool flag = false;
 
-        addrs = (nvm_addr* ) calloc(1, sizeof(*addrs));
+        
             //See if the corresponding lpa in pagemap is set to write (valid read state)
             /*if(table.find(address+(i*geo->l.nbytes)) != table.end()) {
                 addrs[i] = table[address+(i*geo->l.nbytes)].ppa;
@@ -166,7 +167,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
                     return -3;
                 }
             nvm_addr_prn(addrs, 1, dev);
-            int ret = nvm_cmd_read(dev, addrs, sectors_required, temp_read_buffer, NULL, 0, &ret_struct);
+            int ret = nvm_cmd_read(dev, addrs, 1, temp_read_buffer, NULL, 0, &ret_struct);
             nvm_ret_pr(&ret_struct);
 	    temp_read_buffer = temp_read_buffer + geo->l.nbytes;
             //read_buffer[i] = *temp_read_buffer;
