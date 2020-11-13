@@ -97,20 +97,21 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 	
 	if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size) {
 		int sectors_required = num_bytes/geo->l.nbytes;
-		addrs = (nvm_addr* ) calloc(sectors_required, sizeof(*addrs));
+		addrs = (nvm_addr* ) calloc(1, sizeof(*addrs));
 
         
-        if (sectors_required <= max_read_sectors) {
-            //Read in till the max read limit..
-        } else {
-            size_t sectors_remaining = sectors_required;
+        // if (sectors_required <= max_read_sectors) {
+        //     //Read in till the max read limit..
+        // } else {
+        //     size_t sectors_remaining = sectors_required;
 
-        }
-        int read_units = sectors_required/max_read_sectors;
-        if(sectors_required%max_read_sectors!=0) {
-            read_units += 1;
-        }
-
+        // }
+        // int read_units = sectors_required/max_read_sectors;
+        // if(sectors_required%max_read_sectors!=0) {
+        //     read_units += 1;
+        // }
+        void *temp_read_buff;
+        temp_read_buff = buffer;
 		//TODO: Parallelise this..
 		for(auto i=0; i<sectors_required; ++i) {
 			bool flag = false;
@@ -118,16 +119,20 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 			for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
 				if (iter->lpa == address + (i*geo->l.nbytes) && iter->flag == 'W') {
 					flag = true;
-					addrs[i] = iter->ppa;
+					addrs[0] = iter->ppa;
 					break;
 				}
 			}
 			if (!flag) {
 				return -3;
 			}
+            nvm_addr_prn(addrs, 1, dev);
+            int ret = nvm_cmd_read(dev, addrs, 1, temp_read_buff, NULL, 0, &ret_struct);
+            nvm_ret_pr(&ret_struct);
+            temp_read_buff = temp_read_buff + 4096;
 		}
 
-		nvm_addr_prn(addrs, sectors_required, dev);
+		// nvm_addr_prn(addrs, sectors_required, dev);
 
         //DO Read in multiples of 64 (max_read_sectors)...
         size_t addrs_iter = 0;
@@ -145,16 +150,16 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 		    nvm_ret_pr(&ret_struct);
         }*/
 
-        int ret = nvm_cmd_read(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
-        nvm_ret_pr(&ret_struct);
+        // int ret = nvm_cmd_read(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
+        // nvm_ret_pr(&ret_struct);
 
 	
-		if(ret == 0) {
+		// if(ret == 0) {
 			//Successful read..
 			return num_bytes;
-		} else {
-			return -567; 
-		}
+		// } else {
+			// return -567; 
+		// }
 	}
 
 	return -ENOSYS;
