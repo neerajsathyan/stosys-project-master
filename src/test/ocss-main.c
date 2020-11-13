@@ -28,22 +28,9 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <liblightnvm.h>
-#include <string.h>
-#include <errno.h>
-#include <sys/types.h>
 
 // how to compile this code
 // gcc ocssd_main.c -llightnvm -laio -fopenmp
-
-struct PageMapProp {
-    size_t lpa;
-    struct nvm_addr ppa;
-    char flag;
-    size_t num_bytes;
-    size_t start_address;
-};
-
-void update_genericaddress(int group, int pu, size_t chunk, size_t sector);
 
 int main(int argc, char **argv) {
     struct nvm_ret ret_struct;
@@ -64,25 +51,6 @@ int main(int argc, char **argv) {
     dev_geo = nvm_dev_get_geo(dev);
     // we have other custom features
     min_write_size = nvm_dev_get_ws_min(dev);
-
-    int curr_physical_group = 0;
-    int curr_physical_pu = 0;
-    size_t curr_physical_sector = 0;
-    size_t curr_physical_chunk = 0;
-    
-    /*New code*/
-    size_t sectors_per_chunk = dev_geo->l.nsectr;
-    printf("Sectors per chunk is %lu sectors \n",sectors_per_chunk);
-    size_t num_chunks = dev_geo->tbytes / (dev_geo->l.nsectr * dev_geo->l.nbytes);
-    printf("Number of chunks %lu \n", num_chunks);
-    size_t sector_size = dev_geo->l.nbytes;
-    printf("Sector size from l -> %lu \n",sector_size);
-    size_t chunk_size = dev_geo->l.nsectr * dev_geo->l.nbytes;
-    printf("Chunk Size is %lu bytes \n",chunk_size);
-    size_t device_size = dev_geo->tbytes;
-    printf("Device Size %lu bytes\n",device_size);
-    size_t current_size_nbytes = 0;
-    
     printf("The size of the sector is %lu bytes \n", dev_geo->sector_nbytes);
     printf("The minimum write sector count is %d \n", min_write_size);
 
@@ -97,32 +65,26 @@ int main(int argc, char **argv) {
     addrs = calloc(min_write_size, sizeof(*addrs));
     // we will pick up first write_size_in_bytes addresses
     // TODO: notice we are not checking if the maximum number of blocks in a chunk is reached or not, you should
-    
-    size_t alignment = dev_geo->l.nbytes;
-
-    if ((write_size_in_bytes%alignment == 0) && (write_size_in_bytes >= min_write_size*sector_size)) {
-        size_t sectors_required = write_size_in_bytes/dev_geo->l.nbytes;
-        for(size_t i=0; i < sectors_required; i++){
-            // rest is already initialized to zero, we just need to increase the sector number
-            // we are using the generic addressing mode
-            addrs[i].l.pugrp = curr_physical_group;
-            addrs[i].l.punit = curr_physical_pu;
-            addrs[i].l.chunk = curr_physical_chunk;
-            addrs[i].l.sectr = curr_physical_sector;
-            update_genericaddress(&curr_physical_group, &curr_physical_pu, &curr_physical_chunk, &curr_physical_sector);
-        }
-    } else {
-
+    for(i=0; i < min_write_size; i++){
+        // rest is already initialized to zero, we just need to increase the sector number
+        // we are using the generic addressing mode
+        addrs[i].l.sectr = i;
     }
-    
 
 
     ret = nvm_cmd_write(dev, addrs, min_write_size, write_buffer, NULL, 0, &ret_struct);
     printf("The return code for the write operation is %d \n", ret);
     nvm_ret_pr(&ret_struct);
 
-    read_buffer = calloc(1, write_size_in_bytes);
-    ret = nvm_cmd_read(dev, addrs, min_write_size, read_buffer, NULL, 0, &ret_struct);
+    struct nvm_addr *addrs2;
+    addrs2 = calloc(64, sizeof(*addrs2));
+    for (auto i = 0; i < 64; i++) {
+        addrs2[i].l.sectr = i;
+    }
+    
+
+    read_buffer = calloc(64, dev_geo->sector_nbytes);
+    ret = nvm_cmd_read(dev, addrs2, 64, read_buffer, NULL, 0, &ret_struct);
     printf("The return code for the read operation is %d \n", ret);
     nvm_ret_pr(&ret_struct);
     printf("Matching the pattern ...\n");
@@ -138,16 +100,4 @@ int main(int argc, char **argv) {
     nvm_dev_close(dev);
     printf("All done, good bye cruel world!\n");
     return 0;
-}
-
-void update_genericaddress(int curr_physical_group, int curr_physical_pu , size_t curr_physical_chunk, size_t curr_physical_sector) {
-        //Do updates to this like if 
-    curr_physical_sector = (curr_physical_sector + 1)%sectors_per_chunk;
-    if (curr_physical_sector == 0)
-        curr_physical_chunk = (curr_physical_chunk + 1)%geo->l.nchunk;
-    if (curr_physical_chunk == 0)
-        curr_physical_pu = (curr_physical_pu + 1)%geo->l.npunit;
-    //TODO: Implement R/W Parallelism here later..
-    if (curr_physical_pu == 0)
-        curr_physical_group = (curr_physical_group + 1)%geo->l.npugrp;
 }

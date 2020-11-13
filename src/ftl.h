@@ -48,12 +48,6 @@ typedef struct {
     size_t alignment;
 } OpenChannelDeviceProperties;
 
-typedef struct {
-    // size_t physical_addr;
-    nvm_addr logical_addr;
-    short flag;  //-1 -> invalid, 0-> erase, 1->valid
-} TableField;
-
 class OpenChannelDevice {
     
     struct nvm_dev *dev;
@@ -62,8 +56,8 @@ class OpenChannelDevice {
 
     volatile int curr_ptr = 0; //starting address of the device (in la)
     
-    volatile int curr_physical_group = 0;
-    volatile int curr_physical_pu = 0;
+    volatile size_t curr_physical_group = 0;
+    volatile size_t curr_physical_pu = 0;
     volatile size_t curr_physical_sector = 0;
     volatile size_t curr_physical_chunk = 0;
     
@@ -74,6 +68,8 @@ class OpenChannelDevice {
     size_t device_size;
 
     size_t current_size_nbytes;
+
+    int max_read_sectors = 64; //Based on OpenSSD documentation..
 
     // FTL Map Table (Page Mapped)
     std::vector <PageMapProp> lp2ppMap;
