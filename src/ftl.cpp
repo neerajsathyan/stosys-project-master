@@ -53,8 +53,8 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
     this->num_chunks = this->geo->tbytes / (this->geo->l.nsectr * this->geo->l.nbytes);
     this->sector_size = this->geo->l.nbytes;
     this->chunk_size = this->geo->l.nsectr * this->geo->l.nbytes;
-    this->device_size = 1 * this->geo->l.nsectr * this->geo->l.nbytes;
-    //this->device_size = this->geo->tbytes - (1 * this->geo->l.nsectr * this->geo->l.nbytes);
+    //this->device_size = 1 * this->geo->l.nsectr * this->geo->l.nbytes;
+    this->device_size = this->geo->tbytes - (1 * this->geo->l.nsectr * this->geo->l.nbytes);
     //this->device_size = 4 * this->geo->l.nbytes;
     this->current_size_nbytes = 0;
 
@@ -97,19 +97,15 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 	
 	if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size) {
 		int sectors_required = num_bytes/geo->l.nbytes;
-		addrs = (nvm_addr* ) calloc(sectors_required, sizeof(*addrs));
+		addrs = (nvm_addr* ) calloc(64, sizeof(*addrs));
 
-        
-        if (sectors_required <= max_read_sectors) {
-            //Read in till the max read limit..
-        } else {
-            size_t sectors_remaining = sectors_required;
-
-        }
+    
         int read_units = sectors_required/max_read_sectors;
         if(sectors_required%max_read_sectors!=0) {
             read_units += 1;
         }
+
+		//Merge read units buffers together..
 
 		//TODO: Parallelise this..
 		for(auto i=0; i<sectors_required; ++i) {
@@ -130,7 +126,25 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 		nvm_addr_prn(addrs, sectors_required, dev);
 
         //DO Read in multiples of 64 (max_read_sectors)...
-        size_t addrs_iter = 0;
+		int ret;
+		int sector_iter = sectors_required;
+		for (auto j=0; j<read_units; ++j) {
+			if (sector_iter < max_read_sectors) {
+				ret = nvm_cmd_read(dev, addrs + j*sector_iter, sector_iter, buffer+(j*sector_iter*geo->l.nbytes), NULL, 0, &ret_struct);
+				sector_iter -= sector_iter;
+				if (ret != 0) {
+					nvm_ret_pr(&ret_struct);
+					return -420;
+				}
+			} else {
+				ret = nvm_cmd_read(dev, addrs + j*max_read_sectors, max_read_sectors, buffer+(j*max_read_sectors*geo->l.nbytes), NULL, 0, &ret_struct);
+				sector_iter -= max_read_sectors;
+				if (ret != 0) {
+					nvm_ret_pr(&ret_struct);
+					return -421;
+				}
+			}
+		}
         /*char *read_buffer = calloc(sectors_required*geo->l.nbytes,1);
         for (auto i=0; i<read_units, sectors_required > 0; ++i) {
             int ret;
@@ -145,8 +159,8 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 		    nvm_ret_pr(&ret_struct);
         }*/
 
-        int ret = nvm_cmd_read(dev, addrs, sectors_required, buffer, NULL, 0, &ret_struct);
-        nvm_ret_pr(&ret_struct);
+        //int ret = nvm_cmd_read(dev, addrs, 64, buffer, NULL, 0, &ret_struct);
+        //nvm_ret_pr(&ret_struct);
 
 	
 		if(ret == 0) {
@@ -249,7 +263,7 @@ void OpenChannelDevice::setMap(std::vector <PageMapProp> mapper) {
 	lp2ppMap = mapper;
 }
 
-int main(int argc, char **argv) {
+/*int main(int argc, char **argv) {
 	OpenChannelDevice *device = new OpenChannelDevice("/dev/nvme0n1");
 	OpenChannelDeviceProperties properties;
 	device->get_device_properties(&properties);
@@ -275,8 +289,15 @@ int main(int argc, char **argv) {
 	std::vector<uint8_t> read_vec(disk_size);
 	auto bytes_read = device->read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
 	std::cout<<"Read Status: "<<bytes_read<<"\n";
+
+	std::cout<<"Checking READ and WRITE Buffers\n";
+	if(read_vec == all_data_written) {
+		std::cout<<"Equal!\n";
+	} else {
+		std::cout<<"Unequal\n";
+	}
 	
 
 	device->~OpenChannelDevice();
 	return 0;
-}
+}*/
