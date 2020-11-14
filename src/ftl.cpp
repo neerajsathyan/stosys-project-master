@@ -112,6 +112,8 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
         // }
         void *temp_read_buff;
         temp_read_buff = buffer;
+	//void *read_array = (void *) calloc(sectors_required, geo->l.nbytes);
+        //temp_read_buff = read_array;
 		//TODO: Parallelise this..
 		for(auto i=0; i<sectors_required; ++i) {
 			bool flag = false;
@@ -124,6 +126,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 				}
 			}
 			if (!flag) {
+				printf("i is %d adr to search is %ld\n",i, address + (i*geo->l.nbytes));
 				return -3;
 			}
             nvm_addr_prn(addrs, 1, dev);
@@ -131,6 +134,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
             nvm_ret_pr(&ret_struct);
             temp_read_buff = temp_read_buff + 4096;
 		}
+		//buffer = read_array;
 
 		// nvm_addr_prn(addrs, sectors_required, dev);
 
@@ -258,7 +262,8 @@ int main(int argc, char **argv) {
 	OpenChannelDevice *device = new OpenChannelDevice("/dev/nvme0n1");
 	OpenChannelDeviceProperties properties;
 	device->get_device_properties(&properties);
-	auto disk_size = properties.device_size;
+	//auto disk_size = properties.device_size;
+	auto disk_size = 4096 * 68;
 	auto min_write_size = properties.min_write_size;
 	auto num_waves = disk_size / min_write_size;
 	std::vector<uint8_t> write_vec(min_write_size);
@@ -281,7 +286,12 @@ int main(int argc, char **argv) {
 	auto bytes_read = device->read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
 	std::cout<<"Read Status: "<<bytes_read<<"\n";
 	
-
+	std::cout<<"\nChecking read and write!!\n";
+    if (read_vec == all_data_written) {
+        std::cout<<"Equal!!";
+    } else {
+        std::cout<<"Not Equal!!";
+    }
 	device->~OpenChannelDevice();
 	return 0;
 }
