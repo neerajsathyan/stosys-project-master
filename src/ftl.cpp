@@ -92,12 +92,13 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 	if (lp2ppMap.empty()) {
 		return -2;
 	}
-
+    size_t start_address = address;
+    int num_sectors_in_write = 4;
 	int status = get_device_properties(&properties);
 	
 	if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size) {
-		int sectors_required = num_bytes/geo->l.nbytes;
-		addrs = (nvm_addr* ) calloc(1, sizeof(*addrs));
+		int sectors_required = num_bytes/(geo->l.nbytes*num_sectors_in_write);
+		addrs = (nvm_addr* ) calloc(4, sizeof(*addrs));
 
         
         // if (sectors_required <= max_read_sectors) {
@@ -116,23 +117,27 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
         //temp_read_buff = read_array;
 		//TODO: Parallelise this..
 		for(auto i=0; i<sectors_required; ++i) {
+            for(auto j = 0; j < num_sectors_in_write; j++) {
 			bool flag = false;
+            start_address = start_address + (i * geo->l.nbytes * num_sectors_in_write);
 			//See if the corresponding lpa in pagemap is set to write (valid read state).. check if junk can also be thrown if fresh read without write..
-			for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
-				if (iter->lpa == address + (i*geo->l.nbytes) && iter->flag == 'W') {
-					flag = true;
-					addrs[0] = iter->ppa;
-					break;
-				}
-			}
-			if (!flag) {
-				printf("i is %d adr to search is %ld\n",i, address + (i*geo->l.nbytes));
-				return -3;
-			}
-            nvm_addr_prn(addrs, 1, dev);
-            int ret = nvm_cmd_read(dev, addrs, 1, temp_read_buff, NULL, 0, &ret_struct);
+			    for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
+				    if (iter->lpa == start_address + (j*geo->l.nbytes) && iter->flag == 'W') {
+					    flag = true;
+					    addrs[j] = iter->ppa;
+					    break;
+				    }
+			    }
+			    if (!flag) {
+				    printf("i is %d adr to search is %ld\n",i, address + (i*geo->l.nbytes));
+				    return -3;
+			    }
+            }
+
+            nvm_addr_prn(addrs, num_sectors_in_write, dev);
+            int ret = nvm_cmd_read(dev, addrs, num_sectors_in_write, temp_read_buff, NULL, 0, &ret_struct);
             nvm_ret_pr(&ret_struct);
-            temp_read_buff = temp_read_buff + 4096;
+            temp_read_buff = temp_read_buff + geo->l.nbytes * num_sectors_in_write;
 		}
 		//buffer = read_array;
 
