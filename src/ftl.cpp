@@ -98,7 +98,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 	
 	if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size) {
 		int sectors_required = num_bytes/(geo->l.nbytes*num_sectors_in_write);
-		addrs = (nvm_addr* ) calloc(4, sizeof(*addrs));
+		addrs = (nvm_addr* ) calloc(num_sectors_in_write, sizeof(*addrs));
 
         
         // if (sectors_required <= max_read_sectors) {
@@ -119,7 +119,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 		for(auto i=0; i<sectors_required; ++i) {
             for(auto j = 0; j < num_sectors_in_write; j++) {
 			bool flag = false;
-            start_address = start_address + (i * geo->l.nbytes * num_sectors_in_write);
+            start_address = address + (i * geo->l.nbytes * num_sectors_in_write);
 			//See if the corresponding lpa in pagemap is set to write (valid read state).. check if junk can also be thrown if fresh read without write..
 			    for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
 				    if (iter->lpa == start_address + (j*geo->l.nbytes) && iter->flag == 'W') {
@@ -129,7 +129,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 				    }
 			    }
 			    if (!flag) {
-				    printf("i is %d adr to search is %ld\n",i, address + (i*geo->l.nbytes));
+				    printf("i is %d, j is %d adr to search is %ld\n",i,j, start_address + (j*geo->l.nbytes));
 				    return -3;
 			    }
             }
@@ -268,7 +268,7 @@ int main(int argc, char **argv) {
 	OpenChannelDeviceProperties properties;
 	device->get_device_properties(&properties);
 	//auto disk_size = properties.device_size;
-	auto disk_size = 4096 * 68;
+	auto disk_size = 4096 * 65;
 	auto min_write_size = properties.min_write_size;
 	auto num_waves = disk_size / min_write_size;
 	std::vector<uint8_t> write_vec(min_write_size);
