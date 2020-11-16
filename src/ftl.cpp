@@ -31,9 +31,26 @@ SOFTWARE.
 #include <stdio.h>
 #include <iostream>
 #include <algorithm>
+#include <pthread.h>
+#include <unistd.h>
+
+void* startGC(void *arg) {
+
+    while(true){
+        std::cout<<"Created GC thread";
+        usleep(5000);
+    }
+
+    //decide when to call GC
+
+    //read the table, and select block to evict
+
+    //erase the selected block
 
 
 
+
+}
 
 /* FIXME milestone 2 and 3 (if using C++)
  * Use this function to initialize your FTL.
@@ -57,6 +74,15 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
     this->device_size = this->geo->tbytes - (1 * this->geo->l.nsectr * this->geo->l.nbytes);
     //this->device_size = 4 * this->geo->l.nbytes;
     this->current_size_nbytes = 0;
+
+    // pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*startGC) (void*), void *arg);
+    pthread_t thid;
+    // void *ret;
+
+  if (pthread_create(&thid, NULL, startGC,(void *) "thread 1") != 0) {
+    perror("pthread_create() error. Unable to start GC in another thread");
+    exit(1);
+  }
 
 
     //TODO: Logic to initialise FTL..
@@ -89,6 +115,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 	struct nvm_ret ret_struct;
 	struct nvm_addr* addrs;
 	OpenChannelDeviceProperties properties;
+    int read_block_size = 64;
 	if (lp2ppMap.empty()) {
 		return -2;
 	}
@@ -97,7 +124,7 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 	
 	if (num_bytes % properties.alignment == 0 && num_bytes >= properties.min_read_size) {
 		int sectors_required = num_bytes/geo->l.nbytes;
-		addrs = (nvm_addr* ) calloc(64, sizeof(*addrs));
+		addrs = (nvm_addr* ) calloc(read_block_size, sizeof(*addrs));
 
     
         int read_units = sectors_required/max_read_sectors;
@@ -263,6 +290,8 @@ void OpenChannelDevice::setMap(std::vector <PageMapProp> mapper) {
 	lp2ppMap = mapper;
 }
 
+
+
 /*int main(int argc, char **argv) {
 	OpenChannelDevice *device = new OpenChannelDevice("/dev/nvme0n1");
 	OpenChannelDeviceProperties properties;
@@ -300,4 +329,69 @@ void OpenChannelDevice::setMap(std::vector <PageMapProp> mapper) {
 
 	device->~OpenChannelDevice();
 	return 0;
-}*/
+}
+
+
+TEST_CASE_FIXTURE(FtlTestsFixture, "Hammer that sector!") {
+    OpenChannelDeviceProperties properties;
+    ocd.get_device_properties(&properties);
+    auto disk_size = properties.device_size;
+    auto min_write_size = properties.min_write_size;
+    auto min_read_size = properties.min_read_size;
+    auto num_waves = disk_size / min_write_size;
+    auto times_to_fill = 2;
+    std::vector<uint8_t> write_vec(min_write_size);
+
+    auto last_sector_id = disk_size / min_read_size;
+    auto sector_to_hammer = std::rand() % last_sector_id;
+
+    for (auto attempt=0; attempt<times_to_fill; attempt++) {
+        for (auto i = 0; i < num_waves; i++) {
+            std::generate(write_vec.begin(), write_vec.end(), std::rand);
+
+            auto bytes_written = ocd.write(sector_to_hammer * min_read_size, min_write_size,
+                                           reinterpret_cast<void *>(write_vec.data()));
+            REQUIRE(bytes_written == min_write_size);
+        }
+    }
+
+    std::vector<uint8_t> read_vec(min_write_size);
+    auto bytes_read = ocd.read(sector_to_hammer * min_read_size, min_write_size, reinterpret_cast<void *>(read_vec.data()));
+    CHECK(bytes_read == min_write_size);
+
+    CHECK(read_vec == write_vec);
+}
+
+TEST_CASE_FIXTURE(FtlTestsFixture, "Double the data with GC!") {
+    OpenChannelDeviceProperties properties;
+    ocd.get_device_properties(&properties);
+    auto disk_size = properties.device_size;
+    auto min_write_size = properties.min_write_size;
+    auto num_waves = disk_size / min_write_size;
+    auto times_to_fill = 2;
+    std::vector<uint8_t> write_vec(min_write_size);
+    std::vector<uint8_t> all_data_written(0);
+    all_data_written.reserve(disk_size);
+
+    for (auto attempt=0; attempt<times_to_fill; attempt++) {
+        all_data_written.clear();
+        for (auto i = 0; i < num_waves; i++) {
+            std::generate(write_vec.begin(), write_vec.end(), std::rand);
+
+            all_data_written.insert(all_data_written.begin() + (i * min_write_size), write_vec.begin(),
+                                    write_vec.end());
+
+            auto bytes_written = ocd.write(i * min_write_size, min_write_size,
+                                           reinterpret_cast<void *>(write_vec.data()));
+
+            REQUIRE(bytes_written == min_write_size);
+        }
+    }
+
+    std::vector<uint8_t> read_vec(disk_size);
+    auto bytes_read = ocd.read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
+    CHECK(bytes_read == disk_size);
+
+    CHECK(read_vec == all_data_written);
+
+*/

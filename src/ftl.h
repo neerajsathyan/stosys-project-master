@@ -84,6 +84,7 @@ public:
     void update_genericaddress();
     std::vector <PageMapProp> getMap();
     void setMap(std::vector <PageMapProp> mapper);
+    // void *startGC();
     //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
 };
 
@@ -96,3 +97,5 @@ extern "C" size_t write_ocssd(OpenChannelDevice *dev, size_t address, size_t siz
 extern "C" int properties_ocssd(OpenChannelDevice *dev, OpenChannelDeviceProperties *properties);
 
 extern "C" int close_ocssd(OpenChannelDevice *dev);
+
+// extern "C" void* start
