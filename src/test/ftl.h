@@ -53,11 +53,9 @@ class OpenChannelDevice {
     struct nvm_dev *dev;
     
     const struct nvm_geo *geo;
-
-    volatile int curr_ptr = 0; //starting address of the device (in la)
     
-    volatile size_t curr_physical_group = 0;
-    volatile size_t curr_physical_pu = 0;
+    volatile int curr_physical_group = 0;
+    volatile int curr_physical_pu = 0;
     volatile size_t curr_physical_sector = 0;
     volatile size_t curr_physical_chunk = 0;
     
@@ -69,11 +67,8 @@ class OpenChannelDevice {
 
     size_t current_size_nbytes;
 
-    int max_read_sectors = 64; //Based on OpenSSD documentation..
-
     // FTL Map Table (Page Mapped)
     std::vector <PageMapProp> lp2ppMap;
-    //std::unordered_map<size_t, PageMapProp> table;
 
 public:
     explicit OpenChannelDevice(const std::string &device_path);
@@ -82,9 +77,7 @@ public:
     int64_t write(size_t address, size_t num_bytes, void *buffer);
     int get_device_properties(OpenChannelDeviceProperties *properties);
     void update_genericaddress();
-    std::vector <PageMapProp> getMap();
-    void setMap(std::vector <PageMapProp> mapper);
-    //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
+    bool check_lp_or_emptymap(std::vector <PageMapProp> lp2ppMap, size_t address);
 };
 
 extern "C" OpenChannelDevice *open_ocssd(const char *device_path);
