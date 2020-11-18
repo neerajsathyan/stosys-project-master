@@ -33,6 +33,7 @@ SOFTWARE.
 #include <algorithm>
 #include <pthread.h>
 #include <unistd.h>
+#include <cmath>
 
 void* startGC(void *arg) {
 
@@ -71,21 +72,46 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
     this->sector_size = this->geo->l.nbytes;
     this->chunk_size = this->geo->l.nsectr * this->geo->l.nbytes;
     //this->device_size = 1 * this->geo->l.nsectr * this->geo->l.nbytes;
-    this->device_size = this->geo->tbytes - (1 * this->geo->l.nsectr * this->geo->l.nbytes);
+	//10 Chunks Overprovisioned..
+    this->device_size = this->geo->tbytes - (10 * this->geo->l.nsectr * this->geo->l.nbytes);
     //this->device_size = 4 * this->geo->l.nbytes;
     this->current_size_nbytes = 0;
 
+	//Initialise freeChunkList with info abt all the chunks in the device..
+	populateFreeChunkList();
+
     // pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*startGC) (void*), void *arg);
-    pthread_t thid;
+    /*pthread_t thid;
     // void *ret;
+
+	//Initialise list to store free chunks.. (identified by ppa)
+
 
   if (pthread_create(&thid, NULL, startGC,(void *) "thread 1") != 0) {
     perror("pthread_create() error. Unable to start GC in another thread");
     exit(1);
-  }
+  }*/
 
 
-    //TODO: Logic to initialise FTL..
+}
+
+void OpenChannelDevice::populateFreeChunkList() {\
+	//TODO: remove the chunk from free list when writing..
+	//Inside each PU Grp:
+	for (int i=0; i<geo->l.npugrp; ++i) {
+		//Inside each PU Unit..
+		for (int j=0; j<geo->l.npunit; ++j) {
+			//Inside each chunk.. 
+			for (int k=0; k<geo->l.nchunk; ++k) {
+				nvm_addr addr;
+				addr.l.pugrp = i;
+				addr.l.punit = j;
+				addr.l.chunk = k;
+				addr.l.sectr = 0;
+				freeChunkList.push_back(addr);
+			}
+		}
+	}
 }
 
 /*
@@ -137,17 +163,17 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 		//TODO: Parallelise this..
 		for(auto i=0; i<sectors_required; ++i) {
 			bool flag = false;
-			//See if the corresponding lpa in pagemap is set to write (valid read state).. check if junk can also be thrown if fresh read without write..
 			for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
-				if (iter->lpa == address + (i*geo->l.nbytes) && iter->flag == 'W') {
-					flag = true;
+				if (iter->lpa == address + (i*geo->l.nbytes)) {
 					addrs[i] = iter->ppa;
-					break;
+					if (iter -> flag == 'W') {
+						break;
+					}
 				}
 			}
-			if (!flag) {
+			/*if (!flag) {
 				return -3;
-			}
+			}*/
 		}
 
 		nvm_addr_prn(addrs, sectors_required, dev);
@@ -223,14 +249,26 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
 		for (auto i=0; i<sectors_required; ++i) {
 			if (!lp2ppMap.empty()) {
 				for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
-					if((iter->lpa) == address+(i*geo->l.nbytes)) {
-						//Invalidate those mappings..
+					if((iter->lpa) == address+(i*geo->l.nbytes) && (iter->flag == 'W')) {
+						//Invalidate those mappings.. Overwrite happening in this sector..
 						iter->flag = 'I';
+						current_size_nbytes -= sector_size;
+						//Add to invalidated Chunk List if its already not present..
+						addInvalidatedChunkList(iter->ppa);
 						break;
 					}
 				}
 			}
 
+			//Check if sequential writes filled up the device_size addresses..
+			//Then Invoke GC and store it in free chunk from the free chunk list..
+			if (filled_sequential_write()) {
+				//Get a free chunk.. or if working with the same chunk, use that..
+				//Get from fchunk iter which is updated by GC upon invocation..
+				//if(fchunk_iter.l)
+
+			}
+			//Sequential write in the beginning..
 			addrs[i].l.pugrp = curr_physical_group;
 			addrs[i].l.punit = curr_physical_pu;
 			addrs[i].l.chunk = curr_physical_chunk;
@@ -244,7 +282,10 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
 			pagemap->start_address = address;
 			//Adding the page map to the table..
 			lp2ppMap.push_back(*pagemap);
-			update_genericaddress();		
+			update_genericaddress();
+
+			//Remove from free chunk..
+			removeFromFreeChunkList(addrs, sectors_required);		
 
 		}
 	assert(current_size_nbytes+num_bytes <= device_size);
@@ -265,6 +306,79 @@ int64_t OpenChannelDevice::write(size_t address, size_t num_bytes, void *buffer)
 
 	//0x2
 	return -ENOSYS;
+}
+
+
+nvm_addr* OpenChannelDevice::getMinWriteSizeFreeSectors() {
+	
+	nvm_addr *addrs = (nvm_addr* ) calloc(nvm_dev_get_ws_min(dev) * this->sector_size, sizeof(*addrs));
+	//TODO:
+	// if (found in current chunk) {
+	// 	//Check in the current chunk..
+	// }
+	// //Check for min write size sectors in invalidation list
+	// else if(found in invalidation list) {
+
+	// } else {
+	// 	//Get it from a free chunk list and update freeChunkList..
+	// }
+
+	return addrs;
+}
+
+bool OpenChannelDevice::filled_sequential_write() {
+	if ((curr_physical_group+1)*(curr_physical_pu+1)*(curr_physical_chunk+1)*(curr_physical_sector+1)*geo->l.nbytes > device_size) {
+		return true;
+	}
+	return false;
+}
+
+void OpenChannelDevice::addInvalidatedChunkList(nvm_addr addr) {
+	//Check if the respective chunk is already invalidated..
+	//If yes then update the free sector availability, else add chunk to the list..
+	InvalidatedChunkProp *inv = new InvalidatedChunkProp();
+	nvm_addr ichunk_addr = addr;
+	ichunk_addr.l.sectr = 0;
+	inv->ppa = ichunk_addr;
+	if (invalidatedChunkList.empty()) {
+		inv->live_data_sectors = geo->l.nsectr - 1;
+		invalidatedChunkList.push_back(*inv);
+	} else {
+		bool equality_flag = false;
+		for (auto i = invalidatedChunkList.begin(); i != invalidatedChunkList.end(); i++) {
+			if (check_nvm_addr_equality(ichunk_addr, i->ppa)) {
+				// Chunk already has invalidated sectors..
+				i->live_data_sectors -= 1;
+				equality_flag = true;
+				break;
+			}
+		}
+		if (!equality_flag) {
+			//Chunk was not present.. add to the list..
+			inv->live_data_sectors = geo->l.nsectr - 1;
+			invalidatedChunkList.push_back(*inv);
+		}
+	}
+}
+
+void OpenChannelDevice::removeFromFreeChunkList(nvm_addr *addr, int addr_size) {
+	for (int i=0; i<addr_size; ++i) {
+		if (addr[i].l.sectr == 0) {
+			for (auto j=freeChunkList.begin(); j!=freeChunkList.end(); ++j) {
+				if(check_nvm_addr_equality(addr[i], *j)) {
+					freeChunkList.erase(j);
+					j--;
+				}
+			}
+		}
+	}
+}
+
+bool OpenChannelDevice::check_nvm_addr_equality(nvm_addr &addr1, nvm_addr &addr2) {
+	if((addr1.l.chunk == addr2.l.chunk)&&(addr1.l.pugrp == addr2.l.pugrp)
+	&&(addr1.l.punit == addr2.l.punit) && (addr1.l.sectr == addr2.l.sectr))
+		return true;
+	return false;
 }
 
 void OpenChannelDevice::update_genericaddress() {
@@ -290,108 +404,71 @@ void OpenChannelDevice::setMap(std::vector <PageMapProp> mapper) {
 	lp2ppMap = mapper;
 }
 
+int64_t OpenChannelDevice::eraseAll() {
+	//Erase entire disk..
+	for (int i = 0; i < geo->l.npugrp; ++i) {
+		for (int j = 0; j < geo->l.npunit; ++j) {
+			for (int k = 0;k < geo->l.nchunk; ++k) {
+				struct nvm_ret ret;
+				struct nvm_addr addrs;
+				addrs.l.punit = i;
+				addrs.l.pugrp = j;
+				addrs.l.chunk = k;
+				int status = nvm_cmd_erase(dev, &addrs, 1, NULL, 0, &ret);
+				if (status == -1) {
+					printf("Erase Error status:");
+					printf(ret.status + "");
+				}
+			}
+		}
+	}
+	printf("Entire disk erase!");
+	return 0;
+}
+
+void OpenChannelDevice::gc_func() {
+	printf("Invoked GC!");
+
+}
 
 
-/*int main(int argc, char **argv) {
+
+int main(int argc, char **argv) {
 	OpenChannelDevice *device = new OpenChannelDevice("/dev/nvme0n1");
 	OpenChannelDeviceProperties properties;
 	device->get_device_properties(&properties);
 	auto disk_size = properties.device_size;
 	auto min_write_size = properties.min_write_size;
 	auto num_waves = disk_size / min_write_size;
-	std::vector<uint8_t> write_vec(min_write_size);
-	std::vector<uint8_t> all_data_written(0);
-	all_data_written.reserve(disk_size);
+	// std::vector<uint8_t> write_vec(min_write_size);
+	// std::vector<uint8_t> all_data_written(0);
+	// all_data_written.reserve(disk_size);
 
-	for (auto i=0; i<num_waves; i++) {
-		std::generate(write_vec.begin(), write_vec.end(), std::rand);
-		all_data_written.insert(all_data_written.begin() + (i * min_write_size), write_vec.begin(), write_vec.end());
-		std::cout<<"\nLogical Address: "<<(i*min_write_size)<<"\n";
-		auto bytes_written = device->write(i * min_write_size, min_write_size, reinterpret_cast<void *>(write_vec.data()));
-		if (bytes_written < 0) {
-			std::cout<<"Error in writing!\n";
-			break;
-		}
-	}
+	// for (auto i=0; i<num_waves; i++) {
+	// 	std::generate(write_vec.begin(), write_vec.end(), std::rand);
+	// 	all_data_written.insert(all_data_written.begin() + (i * min_write_size), write_vec.begin(), write_vec.end());
+	// 	std::cout<<"\nLogical Address: "<<(i*min_write_size)<<"\n";
+	// 	auto bytes_written = device->write(i * min_write_size, min_write_size, reinterpret_cast<void *>(write_vec.data()));
+	// 	if (bytes_written < 0) {
+	// 		std::cout<<"Error in writing!\n";
+	// 		break;
+	// 	}
+	// }
 
-	std::cout<<"\nREADING: \n";
-	std::vector<uint8_t> read_vec(disk_size);
-	auto bytes_read = device->read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
-	std::cout<<"Read Status: "<<bytes_read<<"\n";
+	// std::cout<<"\nREADING: \n";
+	// std::vector<uint8_t> read_vec(disk_size);
+	// auto bytes_read = device->read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
+	// std::cout<<"Read Status: "<<bytes_read<<"\n";
 
-	std::cout<<"Checking READ and WRITE Buffers\n";
-	if(read_vec == all_data_written) {
-		std::cout<<"Equal!\n";
-	} else {
-		std::cout<<"Unequal\n";
-	}
+	// std::cout<<"Checking READ and WRITE Buffers\n";
+	// if(read_vec == all_data_written) {
+	// 	std::cout<<"Equal!\n";
+	// } else {
+	// 	std::cout<<"Unequal\n";
+	// }
 	
-
+	device->eraseAll();
 	device->~OpenChannelDevice();
 	return 0;
 }
 
-
-TEST_CASE_FIXTURE(FtlTestsFixture, "Hammer that sector!") {
-    OpenChannelDeviceProperties properties;
-    ocd.get_device_properties(&properties);
-    auto disk_size = properties.device_size;
-    auto min_write_size = properties.min_write_size;
-    auto min_read_size = properties.min_read_size;
-    auto num_waves = disk_size / min_write_size;
-    auto times_to_fill = 2;
-    std::vector<uint8_t> write_vec(min_write_size);
-
-    auto last_sector_id = disk_size / min_read_size;
-    auto sector_to_hammer = std::rand() % last_sector_id;
-
-    for (auto attempt=0; attempt<times_to_fill; attempt++) {
-        for (auto i = 0; i < num_waves; i++) {
-            std::generate(write_vec.begin(), write_vec.end(), std::rand);
-
-            auto bytes_written = ocd.write(sector_to_hammer * min_read_size, min_write_size,
-                                           reinterpret_cast<void *>(write_vec.data()));
-            REQUIRE(bytes_written == min_write_size);
-        }
-    }
-
-    std::vector<uint8_t> read_vec(min_write_size);
-    auto bytes_read = ocd.read(sector_to_hammer * min_read_size, min_write_size, reinterpret_cast<void *>(read_vec.data()));
-    CHECK(bytes_read == min_write_size);
-
-    CHECK(read_vec == write_vec);
-}
-
-TEST_CASE_FIXTURE(FtlTestsFixture, "Double the data with GC!") {
-    OpenChannelDeviceProperties properties;
-    ocd.get_device_properties(&properties);
-    auto disk_size = properties.device_size;
-    auto min_write_size = properties.min_write_size;
-    auto num_waves = disk_size / min_write_size;
-    auto times_to_fill = 2;
-    std::vector<uint8_t> write_vec(min_write_size);
-    std::vector<uint8_t> all_data_written(0);
-    all_data_written.reserve(disk_size);
-
-    for (auto attempt=0; attempt<times_to_fill; attempt++) {
-        all_data_written.clear();
-        for (auto i = 0; i < num_waves; i++) {
-            std::generate(write_vec.begin(), write_vec.end(), std::rand);
-
-            all_data_written.insert(all_data_written.begin() + (i * min_write_size), write_vec.begin(),
-                                    write_vec.end());
-
-            auto bytes_written = ocd.write(i * min_write_size, min_write_size,
-                                           reinterpret_cast<void *>(write_vec.data()));
-
-            REQUIRE(bytes_written == min_write_size);
-        }
-    }
-
-    std::vector<uint8_t> read_vec(disk_size);
-    auto bytes_read = ocd.read(0, disk_size, reinterpret_cast<void *>(read_vec.data()));
-    CHECK(bytes_read == disk_size);
-
-    CHECK(read_vec == all_data_written);
-
-*/
