@@ -41,6 +41,11 @@ struct PageMapProp {
     //explicit PageMapProp(char flag, size_t lpa, nvm_addr ppa);
 };
 
+struct InvalidatedChunkProp {
+    struct nvm_addr ppa;
+    size_t live_data_sectors;
+};
+
 // group (2) -> PU (4) -> Chunk (6) -> block/sector (256)  ... 4096 bytes sector   50331648 total bytes
 typedef struct {
     size_t device_size;
@@ -61,6 +66,8 @@ class OpenChannelDevice {
     volatile size_t curr_physical_pu = 0;
     volatile size_t curr_physical_sector = 0;
     volatile size_t curr_physical_chunk = 0;
+
+    nvm_addr fchunk_iter;
     
     size_t sectors_per_chunk;
     size_t num_chunks;
@@ -76,18 +83,29 @@ class OpenChannelDevice {
     std::vector <PageMapProp> lp2ppMap;
     //map chunk no to number of times it has been erased
     std::unordered_map<size_t, int> wear_count;
+    //std::unordered_map<size_t, PageMapProp> table;
+    std::vector <nvm_addr> freeChunkList;
+    std::vector <InvalidatedChunkProp> invalidatedChunkList;
+    void populateFreeChunkList();
+    void removeFromFreeChunkList(nvm_addr *addr, int addr_size);
+    bool check_nvm_addr_equality(nvm_addr &addr1, nvm_addr &addr2);
+    void addInvalidatedChunkList(nvm_addr addr);
+    bool filled_sequential_write();
+    nvm_addr* getMinWriteSizeFreeSectors();
 
 public:
     explicit OpenChannelDevice(const std::string &device_path);
     ~OpenChannelDevice();
     int64_t read(size_t address, size_t num_bytes, void *buffer);
     int64_t write(size_t address, size_t num_bytes, void *buffer);
+    int64_t eraseAll();
     int get_device_properties(OpenChannelDeviceProperties *properties);
     void update_genericaddress();
     std::vector <PageMapProp> getMap();
     void setMap(std::vector <PageMapProp> mapper);
     void *startGC(void *arg);
     //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
+    void gc_func();    
 };
 
 extern "C" OpenChannelDevice *open_ocssd(const char *device_path);
