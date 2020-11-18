@@ -137,8 +137,7 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
 
   pthread_mutex_init(&lock, NULL);
   //maybe pass ftlmap as argument because this is not working directly
-  if (pthread_create(&this->thid, NULL, startGC,(void *) "thread 1") != 0) {
-
+//   if (pthread_create(&this->thid, NULL, startGC,(void *) "thread 1") != 0) {}
 
 }
 
