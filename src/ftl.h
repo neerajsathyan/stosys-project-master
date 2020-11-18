@@ -30,6 +30,7 @@ SOFTWARE.
 #include <string>
 #include <liblightnvm.h>
 #include <vector>
+#include <unordered_map>
 
 struct PageMapProp {
     size_t lpa;
@@ -70,10 +71,11 @@ class OpenChannelDevice {
     size_t current_size_nbytes;
 
     int max_read_sectors = 64; //Based on OpenSSD documentation..
-
+    pthread_t thid;
     // FTL Map Table (Page Mapped)
     std::vector <PageMapProp> lp2ppMap;
-    //std::unordered_map<size_t, PageMapProp> table;
+    //map chunk no to number of times it has been erased
+    std::unordered_map<size_t, int> wear_count;
 
 public:
     explicit OpenChannelDevice(const std::string &device_path);
@@ -84,7 +86,7 @@ public:
     void update_genericaddress();
     std::vector <PageMapProp> getMap();
     void setMap(std::vector <PageMapProp> mapper);
-    // void *startGC();
+    void *startGC(void *arg);
     //bool check_lp_or_emptymap(std::unordered_map<size_t, PageMapProp> table, size_t address);
 };
 

@@ -34,21 +34,71 @@ SOFTWARE.
 #include <pthread.h>
 #include <unistd.h>
 
-void* startGC(void *arg) {
 
+pthread_mutex_t  lock ;
+
+
+#define INVALID_SECTOR_THRESHOLD 10;
+
+
+void* OpenChannelDevice::startGC(void *arg) {
+	struct nvm_ret ret_struct;
+	struct nvm_addr address;
     while(true){
         std::cout<<"Created GC thread";
         usleep(5000);
-    }
+
+		pthread_mutex_lock(&lock);
+		// size_t address = 0;
+			//See if the corresponding lpa in pagemap is set to write (valid read state).. check if junk can also be thrown if fresh read without write..
+		int count = 0;
+		PageMapProp  first = lp2ppMap.front();
+		size_t curr_chunk = first.ppa.l.chunk;
+		bool flag = false;
+		for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
+			size_t chunk = iter->ppa.l.chunk;
+			if(curr_chunk != chunk ){
+				curr_chunk = chunk;
+				count = 0;
+			}
+			if (iter->flag == 'I') {
+					// flag = true;
+					// addrs[i] = iter->ppa;
+					// break;
+				count++;
+				//find if chunks of same 
+				// iter->lpa% 4096 + 
+			}
+			if(count > 10) {
+				//Write to a free chunk from the free chunk list
+				//Update the FTL entries
+				flag = true;
+				address = iter->ppa;
+				break;
+				
+			}
+			
+		}
+		if(flag) {
+			//Write to a free chunk all valid values in this chunk 
+
+			//Update the corresponding FTL entries
+
+			//Erase the current chunk
+			nvm_cmd_erase(dev, &address, 1, NULL, 0, &ret_struct);
+		}
+		pthread_mutex_unlock(&lock ); 	
+
+	}
+
+
 
     //decide when to call GC
 
     //read the table, and select block to evict
+	
 
     //erase the selected block
-
-
-
 
 }
 
@@ -71,15 +121,20 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
     this->sector_size = this->geo->l.nbytes;
     this->chunk_size = this->geo->l.nsectr * this->geo->l.nbytes;
     //this->device_size = 1 * this->geo->l.nsectr * this->geo->l.nbytes;
+	//maybe add 6-10 here - number of chunks to overprovision
     this->device_size = this->geo->tbytes - (1 * this->geo->l.nsectr * this->geo->l.nbytes);
     //this->device_size = 4 * this->geo->l.nbytes;
     this->current_size_nbytes = 0;
 
     // pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*startGC) (void*), void *arg);
-    pthread_t thid;
+    // this->thid;
     // void *ret;
 
-  if (pthread_create(&thid, NULL, startGC,(void *) "thread 1") != 0) {
+  
+
+  pthread_mutex_init(&lock, NULL);
+  //maybe pass ftlmap as argument because this is not working directly
+  if (pthread_create(&this->thid, NULL, startGC,(void *) "thread 1") != 0) {
     perror("pthread_create() error. Unable to start GC in another thread");
     exit(1);
   }
@@ -93,6 +148,8 @@ OpenChannelDevice::OpenChannelDevice(const std::string &device_path) {
  * Close device handle, join threads, deallocate memory.
  */
 OpenChannelDevice::~OpenChannelDevice() {
+	void *exit_status;
+	pthread_join( thid ,  &exit_status); 
 	nvm_dev_close(dev);
 }
 
@@ -144,10 +201,12 @@ int64_t OpenChannelDevice::read(size_t address, size_t num_bytes, void *buffer) 
 					addrs[i] = iter->ppa;
 					break;
 				}
+				int curr_cunk = iter->ppa.l.chunk;
 			}
 			if (!flag) {
 				return -3;
 			}
+			
 		}
 
 		nvm_addr_prn(addrs, sectors_required, dev);
