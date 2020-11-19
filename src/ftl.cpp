@@ -45,6 +45,7 @@ pthread_mutex_t  lock ;
 void* OpenChannelDevice::startGC(void *arg) {
 	struct nvm_ret ret_struct;
 	struct nvm_addr address;
+	struct nvm_addr chunk_to_write;
     while(true){
         std::cout<<"Created GC thread";
         usleep(5000);
@@ -56,6 +57,7 @@ void* OpenChannelDevice::startGC(void *arg) {
 		PageMapProp  first = lp2ppMap.front();
 		size_t curr_chunk = first.ppa.l.chunk;
 		bool flag = false;
+		bool flag2 = false;
 		for (auto iter = lp2ppMap.begin(); iter != lp2ppMap.end(); ++iter) {
 			size_t chunk = iter->ppa.l.chunk;
 			if(curr_chunk != chunk ){
@@ -71,7 +73,6 @@ void* OpenChannelDevice::startGC(void *arg) {
 				// iter->lpa% 4096 + 
 			}
 			if(count > 10) {
-				//Write to a free chunk from the free chunk list
 				//Update the FTL entries
 				flag = true;
 				address = iter->ppa;
@@ -82,7 +83,28 @@ void* OpenChannelDevice::startGC(void *arg) {
 		}
 		if(flag) {
 			//Write to a free chunk all valid values in this chunk 
-
+			for(auto iter = in_progress_chunk_list.begin(); iter != in_progress_chunk_list.end(); iter++) {
+				// iter->l.chunk;
+				// iter.;
+				int candidate_free_sectors = chunk_free_sectors.at(iter->l.chunk);
+				if(chunk_free_sectors.at(address.l.chunk) <= candidate_free_sectors) {
+					chunk_to_write = *iter;
+					flag2 = true;
+					break;
+				}
+			}
+			if(!flag2) {
+				if(freeChunkList.size() > 0)
+					chunk_to_write = freeChunkList.front();
+				else
+				{
+					//Can't do a copy merge
+					return ;
+				}
+				
+			}
+			//Write logic to write all valid values to chunk_to_write chunk 
+							
 			//Update the corresponding FTL entries
 
 			//Erase the current chunk
