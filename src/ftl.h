@@ -87,8 +87,8 @@ class OpenChannelDevice {
     std::vector <nvm_addr> freeChunkList;
     std::vector <InvalidatedChunkProp> invalidatedChunkList;
     std::vector <nvm_addr> in_progress_chunk_list;
-    std::unordered_map<size_t, size_t> chunk_free_sectors;
-    
+    std::unordered_map<size_t, size_t> chunk_free_write_size_sectors;
+
     void populateFreeChunkList();
     void removeFromFreeChunkList(nvm_addr *addr, int addr_size);
     bool check_nvm_addr_equality(nvm_addr &addr1, nvm_addr &addr2);

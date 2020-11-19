@@ -86,8 +86,8 @@ void* OpenChannelDevice::startGC(void *arg) {
 			for(auto iter = in_progress_chunk_list.begin(); iter != in_progress_chunk_list.end(); iter++) {
 				// iter->l.chunk;
 				// iter.;
-				int candidate_free_sectors = chunk_free_sectors.at(iter->l.chunk);
-				if(chunk_free_sectors.at(address.l.chunk) <= candidate_free_sectors) {
+				int candidate_free_sectors = chunk_free_write_size_sectors.at(iter->l.chunk);
+				if(chunk_free_write_size_sectors.at(address.l.chunk) <= candidate_free_sectors) {
 					chunk_to_write = *iter;
 					flag2 = true;
 					break;
@@ -109,6 +109,10 @@ void* OpenChannelDevice::startGC(void *arg) {
 
 			//Erase the current chunk
 			nvm_cmd_erase(dev, &address, 1, NULL, 0, &ret_struct);
+			
+
+			//Find starting address and write the start address into list
+			freeChunkList.push_back(address);
 		}
 		pthread_mutex_unlock(&lock ); 	
 
@@ -467,6 +471,40 @@ void OpenChannelDevice::update_genericaddress() {
 	assert(curr_physical_group <= geo->l.npugrp);
 	//TODO: implement size over logic..
 }
+
+
+
+//Write function requirements 
+/*
+Update Free Chunk List, in_progress list, invalid_list
+in_progress_list
+start with free_chunk list
+
+address is determined for each write block
+
+NOTE: the chunk to be used has enough free size to write numbytes
+
+if in_progress_size > size:
+	use in_progress
+else if invalid_list < threhsold:
+	use max(invalid_list)  with lowest amout of invalid sectors
+else if size(free_chunk) > 0
+	use free_chunk
+else:
+	gc
+	use free_chunk
+
+whenever write happens(): increment free_sector_write_map[chunk]++;
+
+in case of overwrite:
+	ftl to "I"
+	chunk to invalid list
+
+
+
+return nvm_addr structure
+
+*/
 
 std::vector <PageMapProp> OpenChannelDevice::getMap() {
 	return lp2ppMap;
